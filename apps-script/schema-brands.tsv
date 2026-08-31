@@ -10,4 +10,4 @@ column	label	type	options	required	searchable	showInCard	order
 Есть свое производство	Есть своё производство	bool	да	FALSE	FALSE	TRUE	9
 Ручная работа	Ручная работа	bool	да	FALSE	FALSE	TRUE	10
 Ссылка	Сайт	url		FALSE	TRUE	TRUE	11
-Столбец 1	Год основания	number		FALSE	FALSE	TRUE	12
+Год основания	Год основания	number		FALSE	FALSE	TRUE	12
