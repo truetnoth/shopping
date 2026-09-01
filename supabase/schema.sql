@@ -172,9 +172,19 @@ create policy field_defs_read on public.field_defs for select to authenticated u
 -- должна иметь само право select. Вью с security_invoker читает
 -- information_schema от имени вызывающего, поэтому без этих грантов список
 -- колонок пришёл бы пустым.
+--
+-- anon грант на таблицы сохраняет намеренно: строк RLS ему всё равно не отдаст,
+-- зато PostgREST ответит пустым списком, а не ошибкой доступа — сайт покажет
+-- экран входа, а keepalive-воркфлоу останется зелёным.
 grant select on public.brands_fashion, public.brands_lifestyle, public.brands_beauty,
-                public.field_defs, public.brand_fields
+                public.field_defs
   to anon, authenticated;
+
+-- brand_fields — вью, а на вью политики RLS не распространяются: доступ там
+-- решает только грант. Поэтому anon его не получает вовсе — иначе состав
+-- колонок читался бы без входа.
+revoke all on public.brand_fields from anon;
+grant select on public.brand_fields to authenticated;
 grant insert, update on public.brands_fashion, public.brands_lifestyle, public.brands_beauty
   to authenticated;
 
