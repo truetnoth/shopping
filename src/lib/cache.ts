@@ -1,26 +1,27 @@
-import type { ListPayload } from '../api/types'
+import type { Dataset } from '../api/types'
 
-const KEY = 'brands.cache.v1'
+// v2: в кэше лежат все три категории сразу, версия v1 (одна таблица) не читается.
+const KEY = 'brands.cache.v2'
 
-export interface CachedList extends ListPayload {
+export interface CachedDataset extends Dataset {
   fetchedAt: number
 }
 
-export function readCache(): CachedList | null {
+export function readCache(): CachedDataset | null {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as CachedList
-    if (!Array.isArray(parsed.rows) || !Array.isArray(parsed.fields)) return null
+    const parsed = JSON.parse(raw) as CachedDataset
+    if (!parsed.fields || !parsed.rows) return null
     return parsed
   } catch {
     return null
   }
 }
 
-export function writeCache(payload: ListPayload): void {
+export function writeCache(dataset: Dataset): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...payload, fetchedAt: Date.now() }))
+    localStorage.setItem(KEY, JSON.stringify({ ...dataset, fetchedAt: Date.now() }))
   } catch {
     // Переполнение квоты или приватный режим: кэш не критичен, просто теряем
     // мгновенную отрисовку при следующем заходе.

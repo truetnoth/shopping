@@ -4,7 +4,10 @@
  * редакции. Запуск: npm test
  */
 import type { BrandRow, FieldDef } from '../src/api/types'
-import { applyFilters, boolPair, collectOptions, splitMulti, validate } from '../src/lib/schema'
+import {
+  applyFilters, boolPair, collectOptions, coreFields, findDuplicates,
+  normalizeName, splitMulti, validate,
+} from '../src/lib/schema'
 import { buildIndex, runSearch } from '../src/lib/search'
 import { cyrToLat, phoneticKey } from '../src/lib/translit'
 
@@ -93,6 +96,58 @@ check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FAL
 check('обязательное поле', validate(fields, { 'Бренд': '' }).errors['Бренд'], 'Обязательное поле')
 check('битая ссылка', validate(fields, { 'Бренд': 'X', 'Ссылка': 'ame-store.ru' }).errors['Ссылка'], 'Ссылка должна начинаться с http:// или https://')
 check('валидная строка', validate(fields, { 'Бренд': 'X', 'Ссылка': 'https://ame-store.ru' }).ok, true)
+
+/* ------------------------------------------- три категории: ядро и общий поиск */
+
+// Схемы лайфстайла и красоты повторяют ядро моды, но со своими полями —
+// пересечение по колонкам и есть то, по чему работает поиск в режиме «Все».
+const core = ['Бренд', 'Страна', 'Ценовой сегмент', 'Для кого', 'Ссылка', 'Теги', 'Город']
+const lifestyleFields: FieldDef[] = [
+  ...fields.filter((field) => core.includes(field.column)),
+  f('Тип', { type: 'multiselect', options: ['Мебель', 'Декор'] }),
+]
+const beautyFields: FieldDef[] = [
+  ...fields.filter((field) => core.includes(field.column)),
+  f('Тип', { type: 'multiselect', options: ['Макияж'] }),
+]
+
+check(
+  'общее ядро — пересечение трёх схем',
+  coreFields([fields, lifestyleFields, beautyFields]).map((field) => field.column),
+  core,
+)
+check(
+  'поле только одной категории в ядро не попадает',
+  coreFields([fields, lifestyleFields, beautyFields]).some((field) => field.column === 'Тип'),
+  false,
+)
+check('ядро из одной схемы — это она сама', coreFields([lifestyleFields]).length, lifestyleFields.length)
+check('пустые схемы не ломают ядро', coreFields([]), [])
+
+const lifestyleRow: BrandRow = {
+  id: 'Nook', archived: 'FALSE', category: 'lifestyle',
+  'Бренд': 'Nook', 'Страна': 'Российский бренд', 'Ценовой сегмент': '2',
+  'Для кого': '', 'Ссылка': 'https://nook.ru', 'Теги': 'Кэжуал', 'Город': 'Москва', 'Тип': 'Декор',
+}
+
+// В режиме «Все» индекс строится по ядру над строками всех категорий сразу.
+const allRows = [...rows.map((r) => ({ ...r, category: 'fashion' })), lifestyleRow]
+const allIndex = buildIndex(coreFields([fields, lifestyleFields, beautyFields]), allRows)
+const allNames = (q: string) => runSearch(allIndex, q).map((r) => r['Бренд']).sort()
+
+check('общий поиск находит бренд лайфстайла', allNames('Nook'), ['Nook'])
+check('общий поиск находит бренд моды', allNames('Anka'), ['Anka'])
+check('общий поиск в другой раскладке', allNames('Нук'), ['Nook'])
+check('категория едет вместе со строкой', runSearch(allIndex, 'Nook')[0].category, 'lifestyle')
+
+/* -------------------------------------------------------------- поиск дубликатов */
+
+check('дубль без учёта регистра', findDuplicates(rows, fields, 'anka').map((r) => r.id), ['Anka'])
+check('дубль без учёта лишних пробелов', findDuplicates(rows, fields, '  May   of May ').map((r) => r.id), ['May of May'])
+check('нового бренда в базе нет', findDuplicates(rows, fields, 'Совсем новый'), [])
+check('сама строка не считается своим дублем', findDuplicates(rows, fields, 'Anka', 'Anka'), [])
+check('пустое имя дублей не ищет', findDuplicates(rows, fields, '   '), [])
+check('нормализация склеивает ё, регистр и пробелы', normalizeName('  Тёплый  Дом '), 'теплый дом')
 
 if (failures) throw new Error(`${failures} проверок упало`)
 console.log('\nвсе проверки прошли')

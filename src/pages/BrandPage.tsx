@@ -1,45 +1,55 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { archiveBrand } from '../api/client'
+import { ApiError, ERR_CONFLICT, archiveBrand } from '../api/client'
 import { useToast } from '../components/Toast'
+import { categoryLabel, isCategoryId } from '../lib/categories'
 import { brandName, isArchived, splitMulti } from '../lib/schema'
 import { useBrands } from '../store/BrandsContext'
 import { useWrite } from '../store/useWrite'
-import type { FieldDef } from '../api/types'
+import type { BrandRow, FieldDef } from '../api/types'
 
 export function BrandPage() {
-  const { id = '' } = useParams()
+  const { category, id = '' } = useParams()
   const navigate = useNavigate()
-  const { data, getById } = useBrands()
+  const { data, getById, applyRow } = useBrands()
   const { run, busy } = useWrite()
   const toast = useToast()
 
-  const row = getById(decodeURIComponent(id))
-
   if (!data) return null
-  if (!row) {
-    return (
-      <div className="empty">
-        <p>Бренд не найден — возможно, строку удалили из таблицы.</p>
-        <Link className="btn btn--ghost" to="/">К поиску</Link>
-      </div>
-    )
-  }
+  if (!isCategoryId(category)) return <NotFound />
 
+  const row = getById(category, decodeURIComponent(id))
+  if (!row) return <NotFound />
+
+  const fields = data.fields[category]
   const archived = isArchived(row)
 
   const toggleArchive = async () => {
     const question = archived
       ? 'Вернуть бренд из архива?'
-      : 'Убрать бренд в архив? Строка останется в таблице, но пропадёт из выдачи.'
+      : 'Убрать бренд в архив? Он останется в базе, но пропадёт из выдачи.'
     if (!confirm(question)) return
 
     try {
       await run((creds) =>
-        archiveBrand({ token: creds.token, author: creds.author, id: row.id, archived: !archived }),
+        archiveBrand({
+          category,
+          author: creds.author,
+          id: row.id,
+          baseUpdatedAt: row.updated_at ?? '',
+          archived: !archived,
+        }),
       )
       toast(archived ? 'Бренд возвращён в базу' : 'Бренд убран в архив')
     } catch (err) {
       if (err instanceof Error && err.message === 'Отменено') return
+
+      if (err instanceof ApiError && err.code === ERR_CONFLICT) {
+        const current = err.details.row as BrandRow | undefined
+        if (current) applyRow(category, current)
+        toast('Бренд уже изменили — карточка обновлена, попробуйте ещё раз.', 'error')
+        return
+      }
+
       toast(err instanceof Error ? err.message : 'Не удалось сохранить', 'error')
     }
   }
@@ -48,11 +58,15 @@ export function BrandPage() {
     <article className="brand">
       <header className="brand__header">
         <h1>
-          {brandName(row, data.fields)}
+          {brandName(row, fields)}
+          <span className="badge badge--muted">{categoryLabel(category)}</span>
           {archived && <span className="badge">в архиве</span>}
         </h1>
         <div className="brand__actions">
-          <Link className="btn btn--primary" to={`/brand/${encodeURIComponent(row.id)}/edit`}>
+          <Link
+            className="btn btn--primary"
+            to={`/brand/${category}/${encodeURIComponent(row.id)}/edit`}
+          >
             Редактировать
           </Link>
           <button className="btn btn--ghost" onClick={() => void toggleArchive()} disabled={busy}>
@@ -62,7 +76,7 @@ export function BrandPage() {
       </header>
 
       <dl className="brand__fields">
-        {data.fields
+        {fields
           .filter((field) => !field.isName && row[field.column])
           .map((field) => (
             <div key={field.column} className="brand__field">
@@ -83,6 +97,15 @@ export function BrandPage() {
         Назад
       </button>
     </article>
+  )
+}
+
+function NotFound() {
+  return (
+    <div className="empty">
+      <p>Бренд не найден — возможно, его удалили из базы.</p>
+      <Link className="btn btn--ghost" to="/">К поиску</Link>
+    </div>
   )
 }
 

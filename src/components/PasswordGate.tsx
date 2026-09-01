@@ -1,37 +1,42 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { clearToken, getAuthor, getToken, hashPassword, setAuthor, setToken } from '../lib/auth'
+import { getAuthor, hasSession, setAuthor, signIn, signOut } from '../lib/auth'
 
 export interface Credentials {
-  token: string
+  /** Кто вносит правку — уходит в updated_by. Сам доступ даёт сессия Supabase. */
   author: string
 }
 
 interface EditorAuth {
-  /** Отдаёт пароль редакции, при необходимости спросив его модалкой. */
+  /** Отдаёт данные автора, при необходимости спросив пароль модалкой. */
   ensure: () => Promise<Credentials>
   forget: () => void
-  hasToken: boolean
+  signedIn: boolean
 }
 
 const AuthContext = createContext<EditorAuth | null>(null)
 
 export function EditorAuthProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [hasToken, setHasToken] = useState(() => Boolean(getToken()))
+  const [signedIn, setSignedIn] = useState(false)
   const [password, setPassword] = useState('')
   const [author, setAuthorInput] = useState(() => getAuthor())
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const pending = useRef<{ resolve: (c: Credentials) => void; reject: (e: Error) => void } | null>(null)
 
-  const ensure = useCallback(() => {
-    const token = getToken()
+  useEffect(() => {
+    void hasSession().then(setSignedIn)
+  }, [])
+
+  const ensure = useCallback(async (): Promise<Credentials> => {
     const savedAuthor = getAuthor()
     // Пароль спрашиваем только в момент первой записи — поиск остаётся открытым.
-    if (token && savedAuthor) return Promise.resolve({ token, author: savedAuthor })
+    if (savedAuthor && (await hasSession())) return { author: savedAuthor }
 
     setPassword('')
     setAuthorInput(savedAuthor)
+    setError(null)
     setOpen(true)
     return new Promise<Credentials>((resolve, reject) => {
       pending.current = { resolve, reject }
@@ -39,8 +44,8 @@ export function EditorAuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const forget = useCallback(() => {
-    clearToken()
-    setHasToken(false)
+    void signOut()
+    setSignedIn(false)
   }, [])
 
   const close = useCallback(() => {
@@ -56,17 +61,22 @@ export function EditorAuthProvider({ children }: { children: ReactNode }) {
       if (!name) return
 
       setBusy(true)
+      setError(null)
       try {
-        const existing = getToken()
-        const token = password ? await hashPassword(password) : existing
-        if (!token) return
+        // Пустой пароль при живой сессии — редактор просто уточняет своё имя.
+        if (password) await signIn(password)
+        else if (!(await hasSession())) {
+          setError('Введите пароль редакции')
+          return
+        }
 
-        setToken(token)
         setAuthor(name)
-        setHasToken(true)
+        setSignedIn(true)
         setOpen(false)
-        pending.current?.resolve({ token, author: name })
+        pending.current?.resolve({ author: name })
         pending.current = null
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Не удалось войти')
       } finally {
         setBusy(false)
       }
@@ -74,7 +84,7 @@ export function EditorAuthProvider({ children }: { children: ReactNode }) {
     [author, password],
   )
 
-  const value = useMemo<EditorAuth>(() => ({ ensure, forget, hasToken }), [ensure, forget, hasToken])
+  const value = useMemo<EditorAuth>(() => ({ ensure, forget, signedIn }), [ensure, forget, signedIn])
 
   return (
     <AuthContext.Provider value={value}>
@@ -84,7 +94,7 @@ export function EditorAuthProvider({ children }: { children: ReactNode }) {
           <form className="modal" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
             <h2>Вход для редакции</h2>
             <p className="muted">
-              Пароль нужен только для добавления и правок. Он сохранится в этом браузере.
+              Пароль нужен только для добавления и правок. Вход сохранится в этом браузере.
             </p>
 
             <label>
@@ -106,9 +116,11 @@ export function EditorAuthProvider({ children }: { children: ReactNode }) {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 autoFocus
-                required={!getToken()}
+                required={!signedIn}
               />
             </label>
+
+            {error && <p className="banner banner--warn">{error}</p>}
 
             <div className="modal__actions">
               <button type="button" className="btn btn--ghost" onClick={close}>

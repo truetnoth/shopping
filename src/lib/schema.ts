@@ -116,3 +116,51 @@ export function emptyValues(fields: FieldDef[]): BrandRow {
   for (const field of fields) values[field.column] = ''
   return values
 }
+
+/**
+ * Названия сравниваем огрублённо: регистр, «ё» и лишние пробелы не должны
+ * прятать дубль. Порт normalizeName_ из прежнего бэкенда на Apps Script.
+ */
+export function normalizeName(value: string | undefined): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Раньше дубли искал сервер, теперь — клиент: вся база уже загружена, поход
+ * на бэкенд ради этого не нужен. Ограничиваем пятью, как и прежде.
+ */
+export function findDuplicates(
+  rows: BrandRow[],
+  fields: FieldDef[],
+  name: string,
+  exceptId?: string,
+): BrandRow[] {
+  const column = nameField(fields)?.column
+  if (!column) return []
+
+  const needle = normalizeName(name)
+  if (!needle) return []
+
+  return rows
+    .filter((row) => row.id !== exceptId && normalizeName(row[column]) === needle)
+    .slice(0, 5)
+}
+
+/**
+ * Общее ядро для поиска по всем категориям сразу: поля, которые есть во всех
+ * трёх схемах. Считается автоматически — добавили колонку во все три таблицы,
+ * и она сама стала общей, никакой отдельной настройки.
+ */
+export function coreFields(schemas: FieldDef[][]): FieldDef[] {
+  const [first, ...rest] = schemas.filter((s) => s.length)
+  if (!first) return []
+
+  const elsewhere = rest.map((s) => new Set(s.map((f) => f.column)))
+  return first
+    .filter((field) => elsewhere.every((columns) => columns.has(field.column)))
+    .sort((a, b) => a.order - b.order)
+}

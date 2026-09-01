@@ -17,9 +17,11 @@ export function App() {
         <main className="content">
           <Routes>
             <Route path="/" element={<SearchPage />} />
+            <Route path="/c/:category" element={<SearchPage />} />
             <Route path="/new" element={<NewPage />} />
-            <Route path="/brand/:id" element={<BrandPage />} />
-            <Route path="/brand/:id/edit" element={<EditPage />} />
+            <Route path="/new/:category" element={<NewPage />} />
+            <Route path="/brand/:category/:id" element={<BrandPage />} />
+            <Route path="/brand/:category/:id/edit" element={<EditPage />} />
             <Route path="*" element={<SearchPage />} />
           </Routes>
         </main>

@@ -21,26 +21,26 @@ export interface FieldDef {
   isName: boolean
 }
 
-/** Строка таблицы: все значения — строки, ровно как в Google Sheets. */
+/** Три крупные категории — три таблицы со своими наборами полей. */
+export type CategoryId = 'fashion' | 'lifestyle' | 'beauty'
+
+/** Верхнеуровневый фильтр: конкретная категория либо поиск по всем сразу. */
+export type Scope = CategoryId | 'all'
+
+/**
+ * Строка таблицы: все значения — строки. Контракт сохранён с версии на Google
+ * Sheets, поэтому мультизначные поля лежат через запятую, а галочки — словом.
+ * Служебные ключи: id, updated_at, updated_by, archived, category.
+ */
 export type BrandRow = Record<string, string>
 
-export interface ListPayload {
-  revision: number
-  nameColumn: string
-  fields: FieldDef[]
-  rows: BrandRow[]
+/** Всё, что сайт держит в памяти: схемы и строки по каждой из трёх категорий. */
+export interface Dataset {
+  fields: Record<CategoryId, FieldDef[]>
+  rows: Record<CategoryId, BrandRow[]>
 }
 
-export interface WritePayload {
+export interface WriteResult {
+  category: CategoryId
   row: BrandRow
-  revision: number
-}
-
-export interface DuplicateInfo {
-  duplicates: BrandRow[]
-}
-
-export interface ConflictInfo {
-  row: BrandRow
-  revision: number
 }

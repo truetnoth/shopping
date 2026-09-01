@@ -1,46 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { fetchList, fetchVersion } from '../api/client'
-import type { BrandRow, ListPayload } from '../api/types'
+import { fetchDataset } from '../api/client'
+import type { BrandRow, CategoryId, Dataset } from '../api/types'
 import { readCache, writeCache } from '../lib/cache'
 
 type Status = 'loading' | 'ready' | 'error'
 
 interface BrandsState {
-  data: ListPayload | null
+  data: Dataset | null
   status: Status
-  /** Данные показаны из кэша и ещё проверяются на свежесть. */
+  /** Данные показаны из кэша и ещё обновляются. */
   stale: boolean
   error: string | null
   reload: () => Promise<void>
-  applyRow: (row: BrandRow, revision: number) => void
-  getById: (id: string) => BrandRow | undefined
+  applyRow: (category: CategoryId, row: BrandRow) => void
+  getById: (category: CategoryId, id: string) => BrandRow | undefined
 }
 
 const BrandsContext = createContext<BrandsState | null>(null)
 
 export function BrandsProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<ListPayload | null>(null)
+  const [data, setData] = useState<Dataset | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
 
-  const load = useCallback(async (cached: ListPayload | null) => {
+  const load = useCallback(async (cached: Dataset | null) => {
     try {
-      // Дешёвая проверка ревизии: если в таблице ничего не менялось,
-      // полный список не тянем вовсе.
-      if (cached) {
-        const { revision } = await fetchVersion()
-        if (revision === cached.revision) {
-          setStale(false)
-          setStatus('ready')
-          setError(null)
-          return
-        }
-      }
-
-      const fresh = await fetchList()
+      const fresh = await fetchDataset()
       setData(fresh)
       writeCache(fresh)
       setStale(false)
@@ -73,22 +61,22 @@ export function BrandsProvider({ children }: { children: ReactNode }) {
     await load(null)
   }, [load])
 
-  const applyRow = useCallback((row: BrandRow, revision: number) => {
+  const applyRow = useCallback((category: CategoryId, row: BrandRow) => {
     setData((prev) => {
       if (!prev) return prev
-      const rows = [...prev.rows]
+      const rows = [...prev.rows[category]]
       const at = rows.findIndex((r) => r.id === row.id)
       if (at === -1) rows.unshift(row)
       else rows[at] = row
 
-      const next = { ...prev, rows, revision }
+      const next: Dataset = { ...prev, rows: { ...prev.rows, [category]: rows } }
       writeCache(next)
       return next
     })
   }, [])
 
   const getById = useCallback(
-    (id: string) => data?.rows.find((row) => row.id === id),
+    (category: CategoryId, id: string) => data?.rows[category]?.find((row) => row.id === id),
     [data],
   )
 

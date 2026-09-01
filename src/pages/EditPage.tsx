@@ -3,52 +3,49 @@ import { ApiError, ERR_CONFLICT, updateBrand } from '../api/client'
 import { BrandForm } from '../components/BrandForm'
 import { useToast } from '../components/Toast'
 import type { BrandRow } from '../api/types'
+import { isCategoryId } from '../lib/categories'
 import { useBrands } from '../store/BrandsContext'
 import { useWrite } from '../store/useWrite'
 
 export function EditPage() {
-  const { id = '' } = useParams()
+  const { category, id = '' } = useParams()
   const navigate = useNavigate()
   const { data, getById, applyRow } = useBrands()
   const { run, busy } = useWrite()
   const toast = useToast()
 
-  const row = getById(decodeURIComponent(id))
-
   if (!data) return <p className="empty">Загружаем…</p>
-  if (!row) {
-    return (
-      <div className="empty">
-        <p>Бренд не найден.</p>
-        <Link className="btn btn--ghost" to="/">К поиску</Link>
-      </div>
-    )
-  }
+  if (!isCategoryId(category)) return <NotFound />
+
+  const row = getById(category, decodeURIComponent(id))
+  if (!row) return <NotFound />
+
+  const fields = data.fields[category]
 
   const save = async (values: BrandRow) => {
     try {
       await run((creds) =>
         updateBrand({
-          token: creds.token,
+          category,
           author: creds.author,
           id: row.id,
-          // Версия строки на момент открытия формы: бэкенд по ней ловит
-          // параллельную правку и не даёт молча затереть чужие изменения.
+          // Версия строки на момент открытия формы: по ней ловим параллельную
+          // правку и не даём молча затереть чужие изменения.
           baseUpdatedAt: row.updated_at ?? '',
+          fields,
           values,
         }),
       )
-      toast('Изменения сохранены в таблице')
-      navigate(`/brand/${encodeURIComponent(row.id)}`, { replace: true })
+      toast('Изменения сохранены')
+      navigate(`/brand/${category}/${encodeURIComponent(row.id)}`, { replace: true })
     } catch (err) {
       if (err instanceof Error && err.message === 'Отменено') return
 
       if (err instanceof ApiError && err.code === ERR_CONFLICT) {
         const current = err.details.row as BrandRow | undefined
-        const revision = err.details.revision as number | undefined
-        if (current && revision !== undefined) applyRow(current, revision)
+        if (current) applyRow(category, current)
         toast(
-          'Бренд уже изменили в таблице. Форма обновлена — проверьте актуальные данные и сохраните заново.',
+          'Бренд уже изменили. Форма обновлена — проверьте актуальные данные и сохраните заново.',
           'error',
         )
         return
@@ -64,8 +61,8 @@ export function EditPage() {
       <BrandForm
         // key сбрасывает состояние формы, когда строка обновилась после конфликта.
         key={row.updated_at}
-        fields={data.fields}
-        rows={data.rows}
+        fields={fields}
+        rows={data.rows[category]}
         initial={row}
         submitLabel="Сохранить"
         busy={busy}
@@ -73,5 +70,14 @@ export function EditPage() {
         onCancel={() => navigate(-1)}
       />
     </>
+  )
+}
+
+function NotFound() {
+  return (
+    <div className="empty">
+      <p>Бренд не найден.</p>
+      <Link className="btn btn--ghost" to="/">К поиску</Link>
+    </div>
   )
 }

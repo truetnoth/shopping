@@ -31,8 +31,10 @@ jobs:
 
       - run: npm run build
         env:
-          # Repository variable: Settings → Secrets and variables → Actions → Variables.
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Repository variables: Settings → Secrets and variables → Actions → Variables.
+          # Оба значения публичны: anon-ключ даёт только чтение, запись закрыта RLS.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           # Сайт живёт по адресу https://<user>.github.io/<repo>/.
           # Если репозиторий называется <user>.github.io — замените на "/".
           VITE_BASE: /${{ github.event.repository.name }}/
