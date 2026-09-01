@@ -28,8 +28,9 @@ export type CategoryId = 'fashion' | 'lifestyle' | 'beauty'
 export type Scope = CategoryId | 'all'
 
 /**
- * Строка таблицы: все значения — строки. Контракт сохранён с версии на Google
- * Sheets, поэтому мультизначные поля лежат через запятую, а галочки — словом.
+ * Строка таблицы: все значения — строки, потому что состав колонок заранее не
+ * известен — он приходит из базы. Отсюда соглашения: мультизначные поля лежат
+ * через запятую, галочки — словом («да»).
  * Служебные ключи: id, updated_at, updated_by, archived, category.
  */
 export type BrandRow = Record<string, string>

@@ -132,10 +132,17 @@ where c.table_schema::text = 'public'
   and c.column_name::text not in ('id', 'updated_at', 'updated_by', 'archived');
 
 -- ---------------------------------------------------------------------------
--- 4. Доступы: читают все, пишут только вошедшие по паролю
+-- 4. Доступы: база закрыта целиком, и на чтение тоже
 -- ---------------------------------------------------------------------------
--- anon-ключ публичный по замыслу — он лежит в собранном сайте. Запись закрывает
--- RLS: без входа в учётку редакции insert и update не проходят.
+-- anon-ключ лежит в собранном сайте, поэтому считать его секретом нельзя —
+-- база закрывается не им, а политиками RLS. Ни одна политика не выдана роли
+-- anon: посторонний с ключом на руках получит пустой ответ, а не данные.
+-- Всё содержательное доступно только роли authenticated, то есть после входа
+-- под паролем редакции.
+--
+-- Grant для anon при этом намеренно оставлен: без него PostgREST отвечал бы
+-- ошибкой доступа, а с ним — пустым списком. Это удобнее (сайт показывает
+-- экран входа, а не сбой) и позволяет keepalive-воркфлоу пинговать базу.
 
 alter table public.brands_fashion   enable row level security;
 alter table public.brands_lifestyle enable row level security;
@@ -150,7 +157,7 @@ begin
     execute format('drop policy if exists brands_insert on public.%I', t);
     execute format('drop policy if exists brands_update on public.%I', t);
 
-    execute format('create policy brands_read   on public.%I for select to anon, authenticated using (true)', t);
+    execute format('create policy brands_read   on public.%I for select to authenticated using (true)', t);
     execute format('create policy brands_insert on public.%I for insert to authenticated with check (true)', t);
     execute format('create policy brands_update on public.%I for update to authenticated using (true) with check (true)', t);
     -- delete-политики нет намеренно: удаление заменено архивированием
@@ -158,7 +165,7 @@ begin
 end $$;
 
 drop policy if exists field_defs_read on public.field_defs;
-create policy field_defs_read on public.field_defs for select to anon, authenticated using (true);
+create policy field_defs_read on public.field_defs for select to authenticated using (true);
 -- Правки field_defs — только из панели Supabase (service role обходит RLS).
 
 -- Гранты на уровне таблиц: RLS решает, какие строки видно, но сперва роль
@@ -172,7 +179,7 @@ grant insert, update on public.brands_fashion, public.brands_lifestyle, public.b
   to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 5. Стартовые описания полей (перенос из apps-script/schema-brands.tsv)
+-- 5. Стартовые описания полей
 -- ---------------------------------------------------------------------------
 
 insert into public.field_defs

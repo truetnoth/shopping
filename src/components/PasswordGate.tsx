@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { getAuthor, hasSession, setAuthor, signIn, signOut } from '../lib/auth'
+import { clearCache } from '../lib/cache'
 
 export interface Credentials {
   /** Кто вносит правку — уходит в updated_by. Сам доступ даёт сессия Supabase. */
@@ -8,132 +9,126 @@ export interface Credentials {
 }
 
 interface EditorAuth {
-  /** Отдаёт данные автора, при необходимости спросив пароль модалкой. */
+  /** Данные автора для записи. Без живой сессии не резолвится. */
   ensure: () => Promise<Credentials>
+  login: (name: string, password: string) => Promise<void>
   forget: () => void
   signedIn: boolean
+  /** Первая проверка сессии закончилась — до неё показывать нечего. */
+  ready: boolean
 }
 
 const AuthContext = createContext<EditorAuth | null>(null)
 
 export function EditorAuthProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
-  const [password, setPassword] = useState('')
-  const [author, setAuthorInput] = useState(() => getAuthor())
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const pending = useRef<{ resolve: (c: Credentials) => void; reject: (e: Error) => void } | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    void hasSession().then(setSignedIn)
-  }, [])
-
-  const ensure = useCallback(async (): Promise<Credentials> => {
-    const savedAuthor = getAuthor()
-    // Пароль спрашиваем только в момент первой записи — поиск остаётся открытым.
-    if (savedAuthor && (await hasSession())) return { author: savedAuthor }
-
-    setPassword('')
-    setAuthorInput(savedAuthor)
-    setError(null)
-    setOpen(true)
-    return new Promise<Credentials>((resolve, reject) => {
-      pending.current = { resolve, reject }
+    void hasSession().then((ok) => {
+      setSignedIn(ok)
+      setReady(true)
     })
   }, [])
 
   const forget = useCallback(() => {
     void signOut()
+    // База закрыта на чтение, поэтому её локальная копия не должна пережить
+    // выход: иначе следующий человек за этим компьютером увидит её без пароля.
+    clearCache()
     setSignedIn(false)
   }, [])
 
-  const close = useCallback(() => {
-    setOpen(false)
-    pending.current?.reject(new Error('Отменено'))
-    pending.current = null
+  const login = useCallback(async (name: string, password: string) => {
+    await signIn(password)
+    setAuthor(name.trim())
+    setSignedIn(true)
   }, [])
 
-  const submit = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault()
-      const name = author.trim()
-      if (!name) return
+  const ensure = useCallback(async (): Promise<Credentials> => {
+    const name = getAuthor()
+    if (name && (await hasSession())) return { author: name }
+    // Сессия протухла на середине работы: возвращаем к экрану входа. Ошибку
+    // «Отменено» вызывающие уже умеют глотать молча.
+    forget()
+    throw new Error('Отменено')
+  }, [forget])
 
-      setBusy(true)
-      setError(null)
-      try {
-        // Пустой пароль при живой сессии — редактор просто уточняет своё имя.
-        if (password) await signIn(password)
-        else if (!(await hasSession())) {
-          setError('Введите пароль редакции')
-          return
-        }
-
-        setAuthor(name)
-        setSignedIn(true)
-        setOpen(false)
-        pending.current?.resolve({ author: name })
-        pending.current = null
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Не удалось войти')
-      } finally {
-        setBusy(false)
-      }
-    },
-    [author, password],
+  const value = useMemo<EditorAuth>(
+    () => ({ ensure, login, forget, signedIn, ready }),
+    [ensure, login, forget, signedIn, ready],
   )
 
-  const value = useMemo<EditorAuth>(() => ({ ensure, forget, signedIn }), [ensure, forget, signedIn])
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+/** Пускает к сайту только после входа: база закрыта целиком, включая поиск. */
+export function AuthGate({ children }: { children: ReactNode }) {
+  const { signedIn, ready } = useEditorAuth()
+
+  if (!ready) return <p className="empty">Проверяем доступ…</p>
+  if (!signedIn) return <LoginScreen />
+  return <>{children}</>
+}
+
+function LoginScreen() {
+  const { login } = useEditorAuth()
+  const [author, setAuthorInput] = useState(() => getAuthor())
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const name = author.trim()
+    if (!name || !password) return
+
+    setBusy(true)
+    setError(null)
+    try {
+      await login(name, password)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось войти')
+      setBusy(false)
+    }
+  }
 
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-      {open && (
-        <div className="modal-backdrop" onClick={close}>
-          <form className="modal" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
-            <h2>Вход для редакции</h2>
-            <p className="muted">
-              Пароль нужен только для добавления и правок. Вход сохранится в этом браузере.
-            </p>
+    <form className="login" onSubmit={submit}>
+      <h1>База брендов</h1>
+      <p className="muted">
+        Доступ по паролю редакции. Вход сохранится в этом браузере.
+      </p>
 
-            <label>
-              Ваше имя
-              <input
-                value={author}
-                onChange={(e) => setAuthorInput(e.target.value)}
-                placeholder="Кто вносит правку"
-                autoComplete="name"
-                required
-              />
-            </label>
+      <label>
+        Ваше имя
+        <input
+          value={author}
+          onChange={(e) => setAuthorInput(e.target.value)}
+          placeholder="Кто вносит правки"
+          autoComplete="name"
+          required
+        />
+      </label>
 
-            <label>
-              Пароль редакции
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                autoFocus
-                required={!signedIn}
-              />
-            </label>
+      <label>
+        Пароль редакции
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          autoFocus
+          required
+        />
+      </label>
 
-            {error && <p className="banner banner--warn">{error}</p>}
+      {error && <p className="banner banner--warn">{error}</p>}
 
-            <div className="modal__actions">
-              <button type="button" className="btn btn--ghost" onClick={close}>
-                Отмена
-              </button>
-              <button type="submit" className="btn btn--primary" disabled={busy}>
-                {busy ? 'Проверяем…' : 'Войти'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </AuthContext.Provider>
+      <button type="submit" className="btn btn--primary" disabled={busy}>
+        {busy ? 'Проверяем…' : 'Войти'}
+      </button>
+    </form>
   )
 }
 

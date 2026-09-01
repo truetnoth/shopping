@@ -8,8 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "esbuild tests/smoke.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/smoke.mjs --log-level=error && node node_modules/.tmp/smoke.mjs",
-    "migrate": "node scripts/migrate-from-sheets.mjs"
+    "test": "esbuild tests/smoke.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/smoke.mjs --log-level=error && node node_modules/.tmp/smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react'
 import { fetchDataset } from '../api/client'
 import type { BrandRow, CategoryId, Dataset } from '../api/types'
+import { useEditorAuth } from '../components/PasswordGate'
 import { readCache, writeCache } from '../lib/cache'
 
 type Status = 'loading' | 'ready' | 'error'
@@ -20,11 +21,12 @@ interface BrandsState {
 const BrandsContext = createContext<BrandsState | null>(null)
 
 export function BrandsProvider({ children }: { children: ReactNode }) {
+  const { signedIn } = useEditorAuth()
   const [data, setData] = useState<Dataset | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const started = useRef(false)
+  const loadedFor = useRef<boolean | null>(null)
 
   const load = useCallback(async (cached: Dataset | null) => {
     try {
@@ -44,8 +46,18 @@ export function BrandsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (started.current) return
-    started.current = true
+    // Перезагружаемся ровно один раз на каждую смену состояния входа; ref нужен
+    // ещё и чтобы StrictMode не тянул базу дважды.
+    if (loadedFor.current === signedIn) return
+    loadedFor.current = signedIn
+
+    if (!signedIn) {
+      setData(null)
+      setStatus('loading')
+      setStale(false)
+      setError(null)
+      return
+    }
 
     const cached = readCache()
     if (cached) {
@@ -54,7 +66,7 @@ export function BrandsProvider({ children }: { children: ReactNode }) {
       setStale(true)
     }
     void load(cached)
-  }, [load])
+  }, [signedIn, load])
 
   const reload = useCallback(async () => {
     setStale(true)

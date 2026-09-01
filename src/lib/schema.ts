@@ -119,7 +119,7 @@ export function emptyValues(fields: FieldDef[]): BrandRow {
 
 /**
  * Названия сравниваем огрублённо: регистр, «ё» и лишние пробелы не должны
- * прятать дубль. Порт normalizeName_ из прежнего бэкенда на Apps Script.
+ * прятать дубль: «Тёплый Дом» и «теплый  дом» — один и тот же бренд.
  */
 export function normalizeName(value: string | undefined): string {
   return String(value ?? '')
