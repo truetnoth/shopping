@@ -14,7 +14,11 @@ export function BrandList({ rows, fields, showCategory = false }: Props) {
   const name = nameField(fields)
   const site = urlField(fields)
   // В карточке списка показываем название плюс пару самых информативных полей.
-  const preview = fields.filter((f) => f.showInCard && f.column !== name?.column).slice(0, 3)
+  // Ссылку пропускаем: она стоит второй по порядку, но в строке под названием
+  // выглядела бы мусором — для неё рядом есть кнопка.
+  const preview = fields
+    .filter((f) => f.showInCard && f.type !== 'url' && f.column !== name?.column)
+    .slice(0, 3)
 
   if (!rows.length) {
     return <p className="empty">Ничего не нашлось. Попробуйте другой запрос или снимите фильтры.</p>

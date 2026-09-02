@@ -1,10 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { createBrand } from '../api/client'
 import { BrandForm } from '../components/BrandForm'
+import { SimilarNote } from '../components/SimilarNote'
 import { useToast } from '../components/Toast'
-import type { BrandRow } from '../api/types'
+import type { BrandRow, CategoryId } from '../api/types'
 import { CATEGORIES, categoryLabel, isCategoryId } from '../lib/categories'
-import { brandName, emptyValues, findDuplicates, nameField } from '../lib/schema'
+import { brandName, emptyValues, findSimilar, nameField } from '../lib/schema'
 import { useBrands } from '../store/BrandsContext'
 import { useWrite } from '../store/useWrite'
 
@@ -35,16 +36,19 @@ export function NewPage() {
   }
 
   const fields = data.fields[category]
-  const rows = data.rows[category]
+  // Похожие ищем по всем трём категориям: тот же бренд легко завести не туда.
+  const rows = CATEGORIES.flatMap((c) => data.rows[c.id])
 
   const save = async (values: BrandRow, force = false) => {
     // Дубли ищем на клиенте: вся база уже загружена, ходить на сервер незачем.
     if (!force) {
       const name = values[nameField(fields)?.column ?? ''] ?? ''
-      const duplicates = findDuplicates(rows, fields, name)
-      if (duplicates.length) {
-        const names = duplicates.map((d) => brandName(d, fields)).join(', ')
-        if (!confirm(`В категории «${categoryLabel(category)}» уже есть: ${names}.\nВсё равно добавить новый бренд?`)) {
+      const similar = findSimilar(rows, fields, name)
+      if (similar.length) {
+        const names = similar
+          .map((d) => `${brandName(d, fields)} (${categoryLabel(d.category as CategoryId)})`)
+          .join(', ')
+        if (!confirm(`Похожий бренд уже есть: ${names}.\nВсё равно добавить новый?`)) {
           return
         }
       }
@@ -68,6 +72,9 @@ export function NewPage() {
       <BrandForm
         fields={fields}
         initial={emptyValues(fields)}
+        renderNameNote={(name) => (
+          <SimilarNote rows={findSimilar(rows, fields, name)} fields={fields} />
+        )}
         submitLabel="Добавить"
         busy={busy}
         onSubmit={(values) => void save(values)}

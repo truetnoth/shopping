@@ -4,6 +4,7 @@ import { App } from './App'
 import { AuthGate, EditorAuthProvider } from './components/PasswordGate'
 import { ToastProvider } from './components/Toast'
 import { BrandsProvider } from './store/BrandsContext'
+import { SearchStateProvider } from './store/SearchState'
 import './styles.css'
 
 // EditorAuthProvider снаружи BrandsProvider: база закрыта на чтение, поэтому
@@ -14,7 +15,10 @@ createRoot(document.getElementById('root')!).render(
       <EditorAuthProvider>
         <BrandsProvider>
           <AuthGate>
-            <App />
+            {/* Внутри гейта: выход из системы уносит с собой и набранные фильтры. */}
+            <SearchStateProvider>
+              <App />
+            </SearchStateProvider>
           </AuthGate>
         </BrandsProvider>
       </EditorAuthProvider>

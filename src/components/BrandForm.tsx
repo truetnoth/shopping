@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { BrandRow, FieldDef } from '../api/types'
 import { boolPair, isTruthy, joinMulti, optionsWithOwn, splitMulti, validate } from '../lib/schema'
 
@@ -7,6 +8,8 @@ interface Props {
   initial: BrandRow
   submitLabel: string
   busy?: boolean
+  /** Подсказка под названием: страница считает её по текущему вводу. */
+  renderNameNote?: (value: string) => ReactNode
   onSubmit: (values: BrandRow) => void
   onCancel: () => void
 }
@@ -18,7 +21,15 @@ interface Props {
  * Справочники закрыты: варианты берутся только из field_defs, завести новое
  * значение из формы нельзя — состав свойств задаёт база.
  */
-export function BrandForm({ fields, initial, submitLabel, busy, onSubmit, onCancel }: Props) {
+export function BrandForm({
+  fields,
+  initial,
+  submitLabel,
+  busy,
+  renderNameNote,
+  onSubmit,
+  onCancel,
+}: Props) {
   const [values, setValues] = useState<BrandRow>(initial)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -74,6 +85,8 @@ export function BrandForm({ fields, initial, submitLabel, busy, onSubmit, onCanc
                 onChange={(v) => set(field.column, v)}
               />
             )}
+
+            {field.isName && renderNameNote?.(values[field.column] ?? '')}
 
             {errors[field.column] && <p className="field__error">{errors[field.column]}</p>}
           </div>

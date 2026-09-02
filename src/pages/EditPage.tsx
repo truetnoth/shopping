@@ -1,9 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, ERR_CONFLICT, updateBrand } from '../api/client'
 import { BrandForm } from '../components/BrandForm'
+import { SimilarNote } from '../components/SimilarNote'
 import { useToast } from '../components/Toast'
 import type { BrandRow } from '../api/types'
-import { isCategoryId } from '../lib/categories'
+import { CATEGORIES, isCategoryId } from '../lib/categories'
+import { findSimilar } from '../lib/schema'
 import { useBrands } from '../store/BrandsContext'
 import { useWrite } from '../store/useWrite'
 
@@ -21,6 +23,9 @@ export function EditPage() {
   if (!row) return <NotFound />
 
   const fields = data.fields[category]
+  // Переименование тоже способно создать дубль, поэтому подсказка та же, что и
+  // при создании; сам бренд из проверки исключаем.
+  const rows = CATEGORIES.flatMap((c) => data.rows[c.id])
 
   const save = async (values: BrandRow) => {
     try {
@@ -64,6 +69,9 @@ export function EditPage() {
         fields={fields}
         initial={row}
         submitLabel="Сохранить"
+        renderNameNote={(name) => (
+          <SimilarNote rows={findSimilar(rows, fields, name, row.id)} fields={fields} />
+        )}
         busy={busy}
         onSubmit={(values) => void save(values)}
         onCancel={() => navigate(-1)}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { BrandList } from '../components/BrandList'
 import { CategoryTabs } from '../components/CategoryTabs'
@@ -12,26 +12,34 @@ import { applyFilters, coreFields, isArchived } from '../lib/schema'
 import type { Filters } from '../lib/schema'
 import { buildIndex, runSearch } from '../lib/search'
 import { useBrands } from '../store/BrandsContext'
+import { useSearchState } from '../store/SearchState'
 
 export function SearchPage() {
   const { category } = useParams()
   const scope: Scope = isCategoryId(category) ? category : 'all'
 
   const { data, status, stale, error, reload } = useBrands()
-  const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<Filters>({})
-  const [showArchived, setShowArchived] = useState(false)
-  const [page, setPage] = useState(1)
+  // Состояние поиска живёт выше страницы и переживает уход в карточку бренда.
+  const { state, patch } = useSearchState()
+  const { query, filters, showArchived, page } = state
 
   // Фильтры привязаны к колонкам, а колонки у категорий разные: чип «Обувь»,
   // оставшийся от «Моды», в «Красоте» не совпал бы ни с одной строкой и молча
   // обнулил бы выдачу. Запрос при этом сохраняем — искать дальше внутри
   // категории удобно.
-  useEffect(() => setFilters({}), [scope])
+  //
+  // Сравниваем с сохранённой категорией, а не вешаем сброс на монтирование:
+  // возврат из карточки — это тоже монтирование, и фильтры бы слетали.
+  useEffect(() => {
+    if (state.scope !== scope) patch({ scope, filters: {}, page: 1 })
+  }, [scope, state.scope, patch])
 
   // Любое сужение выдачи возвращает на первую страницу: остаться на седьмой,
-  // когда результатов стало три, нельзя.
-  useEffect(() => setPage(1), [scope, query, filters, showArchived])
+  // когда результатов стало три, нельзя. Сброс идёт вместе с самой правкой,
+  // а не отдельным эффектом, иначе возврат из карточки терял бы номер страницы.
+  const setQuery = (value: string) => patch({ query: value, page: 1 })
+  const setFilters = (value: Filters) => patch({ filters: value, page: 1 })
+  const setShowArchived = (value: boolean) => patch({ showArchived: value, page: 1 })
 
   // В режиме «Все» ищем по общему ядру: поля, которые есть во всех трёх схемах.
   // Внутри категории — по её полной схеме, как и раньше.
@@ -117,7 +125,7 @@ export function SearchPage() {
           />
           <span>Показывать архив</span>
         </label>
-        <Link className="btn btn--primary" to={scope === 'all' ? '/new' : `/new/${scope}`}>
+        <Link className="btn btn--primary btn--small" to={scope === 'all' ? '/new' : `/new/${scope}`}>
           Добавить бренд
         </Link>
       </div>
@@ -128,7 +136,7 @@ export function SearchPage() {
         page={safePage}
         pageCount={pageCount}
         onChange={(next) => {
-          setPage(next)
+          patch({ page: next })
           // Иначе человек оказывается в середине новой страницы.
           window.scrollTo({ top: 0 })
         }}

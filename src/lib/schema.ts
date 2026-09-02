@@ -1,4 +1,5 @@
 import type { BrandRow, FieldDef } from '../api/types'
+import { phoneticKey } from './translit'
 
 /** Мультизначные поля лежат в ячейке через запятую. */
 export function splitMulti(value: string | undefined): string[] {
@@ -55,9 +56,10 @@ export function urlField(fields: FieldDef[]): FieldDef | undefined {
  * Граница между фильтрами, которые видно сразу, и теми, что лежат под
  * раскрывашкой. Порядок полей задаёт редакция в field_defs — значит, оттуда же
  * правится и состав главных фильтров, без единой правки кода. Сейчас в начале
- * стоят категория (2), «Для кого» (3) и ценовой сегмент (4).
+ * стоят название (1), сайт (2), категория (3), «Для кого» (4) и сегмент (5);
+ * фильтруются из них последние три.
  */
-export const PRIMARY_FILTER_MAX_ORDER = 4
+export const PRIMARY_FILTER_MAX_ORDER = 5
 
 export function splitFilters(fields: FieldDef[]): { primary: FieldDef[]; extra: FieldDef[] } {
   const filterable = filterableFields(fields)
@@ -136,22 +138,14 @@ export function emptyValues(fields: FieldDef[]): BrandRow {
 }
 
 /**
- * Названия сравниваем огрублённо: регистр, «ё» и лишние пробелы не должны
- * прятать дубль: «Тёплый Дом» и «теплый  дом» — один и тот же бренд.
+ * Похожие названия. Сравниваем не буквы, а огрублённый фонетический ключ —
+ * тот же, которым поиск ловит «Гуччи» по записи «Gucci». Регистр, «ё», лишние
+ * пробелы, дефисы и двойные буквы он приводит к одному виду сам.
+ *
+ * Ищет клиент: вся база и так загружена, поход на бэкенд ради этого не нужен.
+ * Ограничиваем пятью — это подсказка, а не выдача.
  */
-export function normalizeName(value: string | undefined): string {
-  return String(value ?? '')
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-/**
- * Раньше дубли искал сервер, теперь — клиент: вся база уже загружена, поход
- * на бэкенд ради этого не нужен. Ограничиваем пятью, как и прежде.
- */
-export function findDuplicates(
+export function findSimilar(
   rows: BrandRow[],
   fields: FieldDef[],
   name: string,
@@ -160,11 +154,11 @@ export function findDuplicates(
   const column = nameField(fields)?.column
   if (!column) return []
 
-  const needle = normalizeName(name)
+  const needle = phoneticKey(name)
   if (!needle) return []
 
   return rows
-    .filter((row) => row.id !== exceptId && normalizeName(row[column]) === needle)
+    .filter((row) => row.id !== exceptId && phoneticKey(row[column] ?? '') === needle)
     .slice(0, 5)
 }
 

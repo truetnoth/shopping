@@ -5,8 +5,8 @@
  */
 import type { BrandRow, FieldDef } from '../src/api/types'
 import {
-  applyFilters, boolPair, coreFields, findDuplicates, normalizeName,
-  optionsWithOwn, splitFilters, splitMulti, urlField, validate,
+  applyFilters, boolPair, coreFields, findSimilar, optionsWithOwn,
+  splitFilters, splitMulti, urlField, validate,
 } from '../src/lib/schema'
 import { pageItems } from '../src/lib/paginate'
 import { buildIndex, runSearch } from '../src/lib/search'
@@ -99,17 +99,18 @@ check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FAL
 
 /* ------------------------------------------- главные и дополнительные фильтры */
 
-// Порядок повторяет field_defs: категория (2), «Для кого» (3) и цена (4) видны
+// Порядок повторяет field_defs: категория (3), «Для кого» (4) и цена (5) видны
 // сразу, всё, что дальше, уезжает под раскрывашку. Нефильтруемые поля
-// (название, год) не попадают никуда.
+// (название, ссылка, год) не попадают никуда.
 const ordered: FieldDef[] = [
   f('Бренд', { isName: true, order: 1 }),
-  f('Категория', { type: 'multiselect', order: 2 }),
-  f('Для кого', { type: 'multiselect', order: 3 }),
-  f('Ценовой сегмент', { type: 'select', order: 4 }),
-  f('Теги', { type: 'multiselect', order: 5 }),
-  f('Город', { type: 'select', order: 7 }),
-  f('Ручная работа', { type: 'bool', order: 10 }),
+  f('Ссылка', { type: 'url', order: 2 }),
+  f('Категория', { type: 'multiselect', order: 3 }),
+  f('Для кого', { type: 'multiselect', order: 4 }),
+  f('Ценовой сегмент', { type: 'select', order: 5 }),
+  f('Теги', { type: 'multiselect', order: 6 }),
+  f('Город', { type: 'select', order: 8 }),
+  f('Ручная работа', { type: 'bool', order: 11 }),
   f('Год основания', { type: 'number', order: 12 }),
 ]
 
@@ -178,12 +179,17 @@ check('пустая выдача не ломает переключатель', 
 
 /* -------------------------------------------------------------- поиск дубликатов */
 
-check('дубль без учёта регистра', findDuplicates(rows, fields, 'anka').map((r) => r.id), ['Anka'])
-check('дубль без учёта лишних пробелов', findDuplicates(rows, fields, '  May   of May ').map((r) => r.id), ['May of May'])
-check('нового бренда в базе нет', findDuplicates(rows, fields, 'Совсем новый'), [])
-check('сама строка не считается своим дублем', findDuplicates(rows, fields, 'Anka', 'Anka'), [])
-check('пустое имя дублей не ищет', findDuplicates(rows, fields, '   '), [])
-check('нормализация склеивает ё, регистр и пробелы', normalizeName('  Тёплый  Дом '), 'теплый дом')
+const similar = (name: string, exceptId?: string) =>
+  findSimilar(rows, fields, name, exceptId).map((r) => r.id)
+
+check('дубль без учёта регистра', similar('anka'), ['Anka'])
+check('дубль без учёта лишних пробелов', similar('  May   of May '), ['May of May'])
+// Главное, ради чего проверка фонетическая: то же название в другой раскладке.
+check('дубль в другой раскладке', similar('Выш'), ['Wysh'])
+check('дубль в другой раскладке (Новая)', similar('Новая'), ['Novaya'])
+check('нового бренда в базе нет', similar('Совсем новый'), [])
+check('сама строка не считается своим дублем', similar('Anka', 'Anka'), [])
+check('пустое имя дублей не ищет', similar('   '), [])
 
 if (failures) throw new Error(`${failures} проверок упало`)
 console.log('\nвсе проверки прошли')

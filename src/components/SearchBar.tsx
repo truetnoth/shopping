@@ -14,7 +14,6 @@ export function SearchBar({ value, onChange, total, found }: Props) {
         value={value}
         placeholder="Поиск по бренду, категории, контактам…"
         onChange={(e) => onChange(e.target.value)}
-        autoFocus
         autoComplete="off"
         spellCheck={false}
       />

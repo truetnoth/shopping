@@ -88,15 +88,15 @@ export function BrandPage() {
         </div>
         <div className="brand__actions">
           <Link
-            className="btn btn--primary"
+            className="btn btn--primary btn--small"
             to={`/brand/${category}/${encodeURIComponent(row.id)}/edit`}
           >
             Редактировать
           </Link>
-          <button className="btn btn--ghost" onClick={() => void toggleArchive()} disabled={busy}>
+          <button className="btn btn--ghost btn--small" onClick={() => void toggleArchive()} disabled={busy}>
             {archived ? 'Вернуть из архива' : 'В архив'}
           </button>
-          <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
+          <button className="btn btn--danger btn--small" onClick={() => void remove()} disabled={busy}>
             Удалить
           </button>
         </div>
