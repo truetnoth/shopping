@@ -49,6 +49,27 @@ export function filterableFields(fields: FieldDef[]): FieldDef[] {
   return fields.filter((f) => f.type === 'select' || f.type === 'multiselect' || f.type === 'bool')
 }
 
+/** Ссылка на сайт бренда — первое поле типа url; по имени колонку не ищем. */
+export function urlField(fields: FieldDef[]): FieldDef | undefined {
+  return fields.find((f) => f.type === 'url')
+}
+
+/**
+ * Граница между фильтрами, которые видно сразу, и теми, что лежат под
+ * раскрывашкой. Порядок полей задаёт редакция в field_defs — значит, оттуда же
+ * правится и состав главных фильтров, без единой правки кода. Сейчас в начале
+ * стоят категория (2), «Для кого» (3) и ценовой сегмент (4).
+ */
+export const PRIMARY_FILTER_MAX_ORDER = 4
+
+export function splitFilters(fields: FieldDef[]): { primary: FieldDef[]; extra: FieldDef[] } {
+  const filterable = filterableFields(fields)
+  return {
+    primary: filterable.filter((f) => f.order <= PRIMARY_FILTER_MAX_ORDER),
+    extra: filterable.filter((f) => f.order > PRIMARY_FILTER_MAX_ORDER),
+  }
+}
+
 /**
  * Чем булево поле записывается обратно в таблицу. В базе брендов галочки
  * проставлены словом «да» при пустой ячейке вместо «нет» — конвенция задаётся

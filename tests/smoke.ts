@@ -6,7 +6,7 @@
 import type { BrandRow, FieldDef } from '../src/api/types'
 import {
   applyFilters, boolPair, collectOptions, coreFields, findDuplicates,
-  normalizeName, splitMulti, validate,
+  normalizeName, splitFilters, splitMulti, urlField, validate,
 } from '../src/lib/schema'
 import { buildIndex, runSearch } from '../src/lib/search'
 import { cyrToLat, phoneticKey } from '../src/lib/translit'
@@ -20,7 +20,7 @@ const fields: FieldDef[] = [
   f('Бренд', { isName: true, required: true }),
   f('Страна', { type: 'select' }),
   f('Категория', { type: 'multiselect', options: ['Одежда', 'Верхняя одежда', 'Сумки', 'Обувь'] }),
-  f('Ценовой сегмент', { type: 'select', options: ['1', '2', '3', '4', '5'] }),
+  f('Ценовой сегмент', { type: 'select', options: ['$', '$$', '$$$'] }),
   f('Для кого', { type: 'multiselect', options: ['Для женщин', 'Для мужчин'] }),
   f('Ссылка', { type: 'url' }),
   f('Теги', { type: 'multiselect' }),
@@ -35,11 +35,11 @@ const row = (values: string[]): BrandRow => {
 }
 
 const rows: BrandRow[] = [
-  row(['Ame', 'Российский бренд', 'Одежда, Верхняя одежда', '3', 'Для женщин', 'https://ame-store.ru', 'Кэжуал, Деловой стиль, Ледилайк', '', 'Москва']),
-  row(['Anka', 'Российский бренд', 'Сумки', '3', 'Для женщин', 'http://ankabags.ru', 'Ледилайк', 'да', 'Петербург']),
-  row(['Novaya', 'Российский бренд', 'Одежда, Верхняя одежда', '3', 'Для женщин, Для мужчин', 'https://novayawear.com', 'Аутдор', '', 'Петербург']),
-  row(['May of May', 'Российский бренд', 'Одежда', '5', 'Для женщин', 'https://mayofmay.ru', 'Деловой стиль', '', 'Москва']),
-  row(['Wysh', 'Российский бренд', 'Обувь', '1', 'Для женщин', 'https://wysh-brand.com', 'Ледилайк, Кэжуал', 'да', 'Петербург']),
+  row(['Ame', 'Россия', 'Одежда, Верхняя одежда', '$$', 'Для женщин', 'https://ame-store.ru', 'Кэжуал, Деловой стиль, Ледилайк', '', 'Москва']),
+  row(['Anka', 'Россия', 'Сумки', '$$', 'Для женщин', 'http://ankabags.ru', 'Ледилайк', 'да', 'Петербург']),
+  row(['Novaya', 'Россия', 'Одежда, Верхняя одежда', '$$', 'Для женщин, Для мужчин', 'https://novayawear.com', 'Аутдор', '', 'Петербург']),
+  row(['May of May', 'Россия', 'Одежда', '$$$', 'Для женщин', 'https://mayofmay.ru', 'Деловой стиль', '', 'Москва']),
+  row(['Wysh', 'Россия', 'Обувь', '$', 'Для женщин', 'https://wysh-brand.com', 'Ледилайк, Кэжуал', 'да', 'Петербург']),
 ]
 
 let failures = 0
@@ -80,7 +80,7 @@ const ids = (rs: BrandRow[]) => rs.map((r) => r.id).sort()
 check('фильтр по multiselect', ids(applyFilters(rows, { 'Категория': ['Сумки'] }, fields)), ['Anka'])
 check('multiselect ловит значение внутри списка', ids(applyFilters(rows, { 'Категория': ['Верхняя одежда'] }, fields)), ['Ame', 'Novaya'])
 check('несколько значений одного поля — ИЛИ', ids(applyFilters(rows, { 'Категория': ['Сумки', 'Обувь'] }, fields)), ['Anka', 'Wysh'])
-check('фильтр по select', ids(applyFilters(rows, { 'Ценовой сегмент': ['3'] }, fields)), ['Ame', 'Anka', 'Novaya'])
+check('фильтр по select', ids(applyFilters(rows, { 'Ценовой сегмент': ['$$'] }, fields)), ['Ame', 'Anka', 'Novaya'])
 check('булев фильтр', ids(applyFilters(rows, { 'Ручная работа': ['Да'] }, fields)), ['Anka', 'Wysh'])
 check('разные поля — И', ids(applyFilters(rows, { 'Город': ['Петербург'], 'Ручная работа': ['Да'] }, fields)), ['Anka', 'Wysh'])
 check('пустой фильтр не режет выдачу', applyFilters(rows, { 'Категория': [] }, fields).length, 5)
@@ -92,6 +92,30 @@ check('теги собираются из данных', collectOptions(fields[6
 check('разбор мультизначения', splitMulti('Одежда,  Верхняя одежда ,,Сумки'), ['Одежда', 'Верхняя одежда', 'Сумки'])
 check('булево пишется как в таблице', boolPair(fields[7]), ['да', ''])
 check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FALSE'])
+
+/* ------------------------------------------- главные и дополнительные фильтры */
+
+// Порядок повторяет field_defs: категория (2), «Для кого» (3) и цена (4) видны
+// сразу, всё, что дальше, уезжает под раскрывашку. Нефильтруемые поля
+// (название, год) не попадают никуда.
+const ordered: FieldDef[] = [
+  f('Бренд', { isName: true, order: 1 }),
+  f('Категория', { type: 'multiselect', order: 2 }),
+  f('Для кого', { type: 'multiselect', order: 3 }),
+  f('Ценовой сегмент', { type: 'select', order: 4 }),
+  f('Теги', { type: 'multiselect', order: 5 }),
+  f('Город', { type: 'select', order: 7 }),
+  f('Ручная работа', { type: 'bool', order: 10 }),
+  f('Год основания', { type: 'number', order: 12 }),
+]
+
+const columns = (list: FieldDef[]) => list.map((field) => field.column)
+
+check('главные фильтры — начало схемы', columns(splitFilters(ordered).primary), ['Категория', 'Для кого', 'Ценовой сегмент'])
+check('остальные фильтры — под раскрывашкой', columns(splitFilters(ordered).extra), ['Теги', 'Город', 'Ручная работа'])
+
+check('сайт бренда — первое поле типа url', urlField(fields)?.column, 'Ссылка')
+check('без url-поля ссылки нет', urlField([f('Бренд')]), undefined)
 
 check('обязательное поле', validate(fields, { 'Бренд': '' }).errors['Бренд'], 'Обязательное поле')
 check('битая ссылка', validate(fields, { 'Бренд': 'X', 'Ссылка': 'ame-store.ru' }).errors['Ссылка'], 'Ссылка должна начинаться с http:// или https://')
@@ -126,7 +150,7 @@ check('пустые схемы не ломают ядро', coreFields([]), [])
 
 const lifestyleRow: BrandRow = {
   id: 'Nook', archived: 'FALSE', category: 'lifestyle',
-  'Бренд': 'Nook', 'Страна': 'Российский бренд', 'Ценовой сегмент': '2',
+  'Бренд': 'Nook', 'Страна': 'Россия', 'Ценовой сегмент': '$',
   'Для кого': '', 'Ссылка': 'https://nook.ru', 'Теги': 'Кэжуал', 'Город': 'Москва', 'Тип': 'Декор',
 }
 

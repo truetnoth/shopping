@@ -198,10 +198,10 @@ values
   -- общее ядро
   ('*', 'name',           'Бренд',                  'text',        '{}',                                                                     true,  true,  true,  1),
   ('*', 'audience',       'Для кого',               'multiselect', '{"Для женщин","Для мужчин"}',                                            false, true,  true,  3),
-  ('*', 'price_tier',     'Ценовой сегмент',        'select',      '{1,2,3,4,5}',                                                            false, false, true,  4),
+  ('*', 'price_tier',     'Ценовой сегмент',        'select',      '{"$","$$","$$$"}',                                                       false, false, true,  4),
   ('*', 'tags',           'Теги',                   'multiselect', '{}',                                                                     false, true,  true,  5),
   ('*', 'city',           'Город',                  'select',      '{"Москва","Петербург","Екатеринбург","Нижний Новгород"}',                false, true,  true,  7),
-  ('*', 'country',        'Страна',                 'select',      '{"Российский бренд"}',                                                   false, true,  true,  8),
+  ('*', 'country',        'Страна',                 'select',      '{"Россия"}',                                                             false, true,  true,  8),
   ('*', 'own_production', 'Есть своё производство', 'bool',        '{да}',                                                                   false, false, true,  9),
   ('*', 'handmade',       'Ручная работа',          'bool',        '{да}',                                                                   false, false, true,  10),
   ('*', 'url',            'Сайт',                   'url',         '{}',                                                                     false, true,  true,  11),

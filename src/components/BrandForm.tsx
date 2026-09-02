@@ -112,17 +112,7 @@ function Control({
     }
 
     case 'select':
-      return (
-        <>
-          {/* Список пополняется прямо из таблицы, поэтому оставляем и ручной ввод. */}
-          <input id={id} list={`${id}-options`} value={value} onChange={(e) => onChange(e.target.value)} />
-          <datalist id={`${id}-options`}>
-            {options.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
-        </>
-      )
+      return <SingleSelect id={id} value={value} options={options} onChange={onChange} />
 
     case 'multiselect':
       return <MultiSelect id={id} value={value} options={options} onChange={onChange} />
@@ -148,6 +138,69 @@ function Control({
     default:
       return <input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
   }
+}
+
+/**
+ * Справочник с одним значением: ряд кнопок вместо выпадашки — «ткнуть» быстрее,
+ * чем вписывать. Устроен как MultiSelect ниже, разница только в том, что
+ * выбранное значение одно.
+ */
+function SingleSelect({
+  id,
+  value,
+  options,
+  onChange,
+}: {
+  id: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+  // Значение из старой записи, которого нет в справочнике, всё равно показываем
+  // кнопкой — иначе оно потерялось бы при первом же сохранении.
+  const all = value && !options.includes(value) ? [...options, value] : options
+
+  const add = () => {
+    const v = draft.trim()
+    if (v) onChange(v)
+    setDraft('')
+  }
+
+  return (
+    <div className="multiselect">
+      <div className="chips">
+        {all.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`chip${value === option ? ' chip--on' : ''}`}
+            // Повторный клик снимает выбор: необязательное поле нужно уметь очистить.
+            onClick={() => onChange(value === option ? '' : option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+      <div className="multiselect__add">
+        <input
+          id={id}
+          value={draft}
+          placeholder="Другое значение"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+        />
+        <button type="button" className="btn btn--ghost" onClick={add}>
+          Добавить
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function MultiSelect({

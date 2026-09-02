@@ -6,7 +6,7 @@ import { FilterChips } from '../components/FilterChips'
 import { SearchBar } from '../components/SearchBar'
 import type { Scope } from '../api/types'
 import { CATEGORIES, isCategoryId } from '../lib/categories'
-import { applyFilters, coreFields, filterableFields, isArchived } from '../lib/schema'
+import { applyFilters, coreFields, isArchived } from '../lib/schema'
 import type { Filters } from '../lib/schema'
 import { buildIndex, runSearch } from '../lib/search'
 import { useBrands } from '../store/BrandsContext'
@@ -95,7 +95,7 @@ export function SearchPage() {
       <SearchBar value={query} onChange={setQuery} total={visibleRows.length} found={results.length} />
 
       <FilterChips
-        fields={filterableFields(fields)}
+        fields={fields}
         rows={visibleRows}
         filters={filters}
         onChange={setFilters}

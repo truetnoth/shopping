@@ -79,9 +79,25 @@ a { color: var(--accent); }
 .searchbar__input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .searchbar__meta { margin: .4rem 0 1rem; font-size: .85rem; }
 
-.filters { display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; }
-.filters__group { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem; }
-.filters__label { font-size: .8rem; color: var(--muted); min-width: 7rem; }
+/* Заголовок стоит над чипами: так все ряды фильтров начинаются от одной
+   левой линии, а не сдвигаются каждый на свою ширину подписи. */
+.filters { display: flex; flex-direction: column; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; }
+.filters__group { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+.filters__label { font-size: .8rem; color: var(--muted); }
+
+.filters__more { align-self: stretch; }
+.filters__more summary {
+  display: inline-block;
+  font-size: .85rem;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.filters__more summary::-webkit-details-marker { display: none; }
+.filters__more summary::before { content: '▸ '; }
+.filters__more[open] summary::before { content: '▾ '; }
+.filters__nested { margin: .6rem 0 0; }
 
 .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
 
@@ -99,8 +115,14 @@ a { color: var(--accent); }
 .chip--static { cursor: default; }
 
 /* Первый фильтр — категории. Чипы-ссылки чуть крупнее обычных фильтров. */
-.chips--tabs { margin-bottom: 1rem; gap: .4rem; }
-.chips--tabs .chip { padding: .4rem .85rem; font-size: .95rem; text-decoration: none; }
+.chips--tabs { margin-bottom: 1rem; gap: .5rem; }
+.chips--tabs .chip {
+  padding: .6rem 1.15rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
 .chip__count { opacity: .6; font-size: .8em; }
 
 .toolbar {
@@ -117,20 +139,38 @@ a { color: var(--accent); }
 .brands { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
 
 .brand-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: .2rem;
+  gap: .5rem;
   padding: .75rem .9rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  text-decoration: none;
-  color: var(--text);
 }
 
 .brand-card:hover { border-color: var(--accent); }
+
+/* Ссылка на страницу бренда растянута на всю плашку через ::after — клик по
+   любому свободному месту работает как раньше, а кнопки лежат поверх неё. */
+.brand-card__link {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+}
+
 .brand-card__name { font-weight: 600; }
 .brand-card__meta { font-size: .85rem; color: var(--muted); }
+.brand-card__actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: .5rem; }
 
 .badge {
   margin-left: .5rem;
@@ -277,9 +317,9 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 
 @media (max-width: 560px) {
   .brand__field { grid-template-columns: 1fr; gap: .1rem; }
-  .filters__label { min-width: 100%; }
   .toolbar { flex-direction: column; align-items: stretch; }
   .toolbar .btn { text-align: center; }
+  .brand-card__actions .btn { flex: 1; text-align: center; }
 }
 
 /* Категория бренда в общей выдаче — приглушённее, чем метка «в архиве». */
