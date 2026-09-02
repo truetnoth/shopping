@@ -156,11 +156,14 @@ begin
     execute format('drop policy if exists brands_read   on public.%I', t);
     execute format('drop policy if exists brands_insert on public.%I', t);
     execute format('drop policy if exists brands_update on public.%I', t);
+    execute format('drop policy if exists brands_delete on public.%I', t);
 
     execute format('create policy brands_read   on public.%I for select to authenticated using (true)', t);
     execute format('create policy brands_insert on public.%I for insert to authenticated with check (true)', t);
     execute format('create policy brands_update on public.%I for update to authenticated using (true) with check (true)', t);
-    -- delete-политики нет намеренно: удаление заменено архивированием
+    -- Архив прячет бренд из выдачи, delete убирает строку насовсем: редакции
+    -- нужны оба действия, поэтому право на удаление у роли есть.
+    execute format('create policy brands_delete on public.%I for delete to authenticated using (true)', t);
   end loop;
 end $$;
 
@@ -185,7 +188,7 @@ grant select on public.brands_fashion, public.brands_lifestyle, public.brands_be
 -- колонок читался бы без входа.
 revoke all on public.brand_fields from anon;
 grant select on public.brand_fields to authenticated;
-grant insert, update on public.brands_fashion, public.brands_lifestyle, public.brands_beauty
+grant insert, update, delete on public.brands_fashion, public.brands_lifestyle, public.brands_beauty
   to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -208,7 +211,7 @@ values
   ('*', 'founded_year',   'Год основания',          'number',      '{}',                                                                     false, false, true,  12),
 
   -- мода
-  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее бельё"}', true,  true, true, 2),
+  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье"}', true,  true, true, 2),
   ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"Базовое","Акцентное"}',                                                 false, true, true, 6),
   ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"Кэжуал","Деловой стиль","Ледилайк","Аутдор","Ворквир","Авангард"}',      false, true, true, 5),
 

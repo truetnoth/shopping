@@ -5,9 +5,10 @@
  */
 import type { BrandRow, FieldDef } from '../src/api/types'
 import {
-  applyFilters, boolPair, collectOptions, coreFields, findDuplicates,
-  normalizeName, splitFilters, splitMulti, urlField, validate,
+  applyFilters, boolPair, coreFields, findDuplicates, normalizeName,
+  optionsWithOwn, splitFilters, splitMulti, urlField, validate,
 } from '../src/lib/schema'
+import { pageItems } from '../src/lib/paginate'
 import { buildIndex, runSearch } from '../src/lib/search'
 import { cyrToLat, phoneticKey } from '../src/lib/translit'
 
@@ -87,8 +88,11 @@ check('пустой фильтр не режет выдачу', applyFilters(row
 
 /* --------------------------------------------------------------- схема и формы */
 
-check('опции = схема плюс факт из таблицы', collectOptions(fields[2], rows), ['Верхняя одежда', 'Обувь', 'Одежда', 'Сумки'])
-check('теги собираются из данных', collectOptions(fields[6], rows), ['Аутдор', 'Деловой стиль', 'Кэжуал', 'Ледилайк'])
+// Справочники закрыты: варианты берутся только из схемы и в порядке базы.
+check('варианты — из схемы, в порядке базы', optionsWithOwn(fields[2], 'Сумки'), ['Одежда', 'Верхняя одежда', 'Сумки', 'Обувь'])
+check('своё значение вне справочника не теряется', optionsWithOwn(fields[2], 'Сумки, Нижнее бельё'), ['Одежда', 'Верхняя одежда', 'Сумки', 'Обувь', 'Нижнее бельё'])
+check('то же для поля с одним значением', optionsWithOwn(fields[3], '4'), ['$', '$$', '$$$', '4'])
+check('поле без вариантов в базе их и не получит', optionsWithOwn(fields[6], ''), [])
 check('разбор мультизначения', splitMulti('Одежда,  Верхняя одежда ,,Сумки'), ['Одежда', 'Верхняя одежда', 'Сумки'])
 check('булево пишется как в таблице', boolPair(fields[7]), ['да', ''])
 check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FALSE'])
@@ -163,6 +167,14 @@ check('общий поиск находит бренд лайфстайла', al
 check('общий поиск находит бренд моды', allNames('Anka'), ['Anka'])
 check('общий поиск в другой раскладке', allNames('Нук'), ['Nook'])
 check('категория едет вместе со строкой', runSearch(allIndex, 'Nook')[0].category, 'lifestyle')
+
+/* ------------------------------------------------------------ страницы списка */
+
+check('страниц мало — показываем все', pageItems(1, 3), [1, 2, 3])
+check('первая страница из многих', pageItems(1, 12), [1, 2, '…', 12])
+check('середина списка', pageItems(6, 12), [1, '…', 5, 6, 7, '…', 12])
+check('последняя страница', pageItems(12, 12), [1, '…', 11, 12])
+check('пустая выдача не ломает переключатель', pageItems(1, 0), [])
 
 /* -------------------------------------------------------------- поиск дубликатов */
 

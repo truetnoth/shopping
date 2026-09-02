@@ -31,18 +31,15 @@ export function brandName(row: BrandRow, fields: FieldDef[]): string {
 }
 
 /**
- * Варианты для фильтров: то, что задано в _schema, плюс всё, что реально
- * встречается в таблице (редакция часто вписывает новое значение руками).
+ * Кнопки справочника в форме: варианты берёт только field_defs, порядок — как в
+ * базе (там он осмысленный: $ · $$ · $$$). Плюс значения, которые уже стоят в
+ * строке, но из справочника исчезли: снять их можно, а вот молча стереть при
+ * сохранении — нет.
  */
-export function collectOptions(field: FieldDef, rows: BrandRow[]): string[] {
-  const seen = new Set<string>(field.options)
-  for (const row of rows) {
-    const raw = row[field.column]
-    if (!raw) continue
-    if (field.type === 'multiselect') splitMulti(raw).forEach((v) => seen.add(v))
-    else seen.add(String(raw).trim())
-  }
-  return Array.from(seen).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ru'))
+export function optionsWithOwn(field: FieldDef, value: string): string[] {
+  const own = field.type === 'multiselect' ? splitMulti(value) : [String(value ?? '').trim()]
+  const extra = own.filter((v) => v && !field.options.includes(v))
+  return extra.length ? [...field.options, ...extra] : field.options
 }
 
 export function filterableFields(fields: FieldDef[]): FieldDef[] {

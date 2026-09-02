@@ -67,7 +67,6 @@ export function NewPage() {
       <h1>Новый бренд · {categoryLabel(category)}</h1>
       <BrandForm
         fields={fields}
-        rows={rows}
         initial={emptyValues(fields)}
         submitLabel="Добавить"
         busy={busy}

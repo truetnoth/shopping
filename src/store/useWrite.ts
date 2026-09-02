@@ -15,21 +15,31 @@ export function useWrite() {
   const { applyRow } = useBrands()
   const [busy, setBusy] = useState(false)
 
+  // Удаление строки не возвращает — отсюда WriteResult | void.
+  const apply = useCallback(
+    (result: WriteResult | void) => {
+      if (result) applyRow(result.category, result.row)
+    },
+    [applyRow],
+  )
+
   const run = useCallback(
-    async (request: (creds: Credentials) => Promise<WriteResult>): Promise<WriteResult> => {
+    async <T extends WriteResult | void>(
+      request: (creds: Credentials) => Promise<T>,
+    ): Promise<T> => {
       setBusy(true)
       try {
         let creds = await ensure()
         try {
           const result = await request(creds)
-          applyRow(result.category, result.row)
+          apply(result)
           return result
         } catch (err) {
           if (err instanceof ApiError && err.code === ERR_UNAUTHORIZED) {
             forget()
             creds = await ensure()
             const result = await request(creds)
-            applyRow(result.category, result.row)
+            apply(result)
             return result
           }
           throw err
@@ -38,7 +48,7 @@ export function useWrite() {
         setBusy(false)
       }
     },
-    [ensure, forget, applyRow],
+    [ensure, forget, apply],
   )
 
   return { run, busy }

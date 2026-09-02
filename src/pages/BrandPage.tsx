@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ApiError, ERR_CONFLICT, archiveBrand } from '../api/client'
+import { ApiError, ERR_CONFLICT, archiveBrand, deleteBrand } from '../api/client'
 import { useToast } from '../components/Toast'
 import { categoryLabel, isCategoryId } from '../lib/categories'
 import { brandName, isArchived, splitMulti } from '../lib/schema'
@@ -10,7 +10,7 @@ import type { BrandRow, FieldDef } from '../api/types'
 export function BrandPage() {
   const { category, id = '' } = useParams()
   const navigate = useNavigate()
-  const { data, getById, applyRow } = useBrands()
+  const { data, getById, applyRow, removeRow } = useBrands()
   const { run, busy } = useWrite()
   const toast = useToast()
 
@@ -54,14 +54,38 @@ export function BrandPage() {
     }
   }
 
+  const remove = async () => {
+    const question =
+      `Удалить бренд «${brandName(row, fields)}» навсегда?\n\n` +
+      'Отменить это будет нельзя. Чтобы просто убрать бренд из выдачи, ' +
+      'используйте «В архив».'
+    if (!confirm(question)) return
+
+    try {
+      await run(() => deleteBrand({ category, id: row.id }))
+      removeRow(category, row.id)
+      toast('Бренд удалён из базы')
+      // Возвращаться на страницу удалённого бренда некуда.
+      navigate(`/c/${category}`, { replace: true })
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Отменено') return
+      toast(err instanceof Error ? err.message : 'Не удалось удалить', 'error')
+    }
+  }
+
   return (
     <article className="brand">
       <header className="brand__header">
-        <h1>
-          {brandName(row, fields)}
-          <span className="badge badge--muted">{categoryLabel(category)}</span>
-          {archived && <span className="badge">в архиве</span>}
-        </h1>
+        <div className="brand__title">
+          <button className="btn btn--ghost btn--small" onClick={() => navigate(-1)}>
+            ← Назад
+          </button>
+          <h1>
+            {brandName(row, fields)}
+            <span className="badge badge--muted">{categoryLabel(category)}</span>
+            {archived && <span className="badge">в архиве</span>}
+          </h1>
+        </div>
         <div className="brand__actions">
           <Link
             className="btn btn--primary"
@@ -71,6 +95,9 @@ export function BrandPage() {
           </Link>
           <button className="btn btn--ghost" onClick={() => void toggleArchive()} disabled={busy}>
             {archived ? 'Вернуть из архива' : 'В архив'}
+          </button>
+          <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
+            Удалить
           </button>
         </div>
       </header>
@@ -92,10 +119,6 @@ export function BrandPage() {
         {row.updated_at && <span>Изменено: {formatDate(row.updated_at)}</span>}
         {row.updated_by && <span> · {row.updated_by}</span>}
       </footer>
-
-      <button className="btn btn--ghost" onClick={() => navigate(-1)}>
-        Назад
-      </button>
     </article>
   )
 }

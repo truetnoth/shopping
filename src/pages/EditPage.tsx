@@ -62,7 +62,6 @@ export function EditPage() {
         // key сбрасывает состояние формы, когда строка обновилась после конфликта.
         key={row.updated_at}
         fields={fields}
-        rows={data.rows[category]}
         initial={row}
         submitLabel="Сохранить"
         busy={busy}

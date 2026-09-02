@@ -15,6 +15,7 @@ interface BrandsState {
   error: string | null
   reload: () => Promise<void>
   applyRow: (category: CategoryId, row: BrandRow) => void
+  removeRow: (category: CategoryId, id: string) => void
   getById: (category: CategoryId, id: string) => BrandRow | undefined
 }
 
@@ -87,14 +88,24 @@ export function BrandsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const removeRow = useCallback((category: CategoryId, id: string) => {
+    setData((prev) => {
+      if (!prev) return prev
+      const rows = prev.rows[category].filter((row) => row.id !== id)
+      const next: Dataset = { ...prev, rows: { ...prev.rows, [category]: rows } }
+      writeCache(next)
+      return next
+    })
+  }, [])
+
   const getById = useCallback(
     (category: CategoryId, id: string) => data?.rows[category]?.find((row) => row.id === id),
     [data],
   )
 
   const value = useMemo<BrandsState>(
-    () => ({ data, status, stale, error, reload, applyRow, getById }),
-    [data, status, stale, error, reload, applyRow, getById],
+    () => ({ data, status, stale, error, reload, applyRow, removeRow, getById }),
+    [data, status, stale, error, reload, applyRow, removeRow, getById],
   )
 
   return <BrandsContext.Provider value={value}>{children}</BrandsContext.Provider>

@@ -3,9 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { BrandList } from '../components/BrandList'
 import { CategoryTabs } from '../components/CategoryTabs'
 import { FilterChips } from '../components/FilterChips'
+import { Pagination } from '../components/Pagination'
 import { SearchBar } from '../components/SearchBar'
 import type { Scope } from '../api/types'
 import { CATEGORIES, isCategoryId } from '../lib/categories'
+import { PAGE_SIZE } from '../lib/paginate'
 import { applyFilters, coreFields, isArchived } from '../lib/schema'
 import type { Filters } from '../lib/schema'
 import { buildIndex, runSearch } from '../lib/search'
@@ -19,12 +21,17 @@ export function SearchPage() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<Filters>({})
   const [showArchived, setShowArchived] = useState(false)
+  const [page, setPage] = useState(1)
 
   // Фильтры привязаны к колонкам, а колонки у категорий разные: чип «Обувь»,
   // оставшийся от «Моды», в «Красоте» не совпал бы ни с одной строкой и молча
   // обнулил бы выдачу. Запрос при этом сохраняем — искать дальше внутри
   // категории удобно.
   useEffect(() => setFilters({}), [scope])
+
+  // Любое сужение выдачи возвращает на первую страницу: остаться на седьмой,
+  // когда результатов стало три, нельзя.
+  useEffect(() => setPage(1), [scope, query, filters, showArchived])
 
   // В режиме «Все» ищем по общему ядру: поля, которые есть во всех трёх схемах.
   // Внутри категории — по её полной схеме, как и раньше.
@@ -55,6 +62,11 @@ export function SearchPage() {
     if (!index) return []
     return applyFilters(runSearch(index, query), filters, fields)
   }, [index, query, filters, fields])
+
+  // База могла обновиться в фоне и стать короче открытой страницы.
+  const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const pageRows = results.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const counts = useMemo(() => {
     if (!data) return {}
@@ -94,12 +106,7 @@ export function SearchPage() {
 
       <SearchBar value={query} onChange={setQuery} total={visibleRows.length} found={results.length} />
 
-      <FilterChips
-        fields={fields}
-        rows={visibleRows}
-        filters={filters}
-        onChange={setFilters}
-      />
+      <FilterChips fields={fields} filters={filters} onChange={setFilters} />
 
       <div className="toolbar">
         <label className="checkbox">
@@ -115,7 +122,17 @@ export function SearchPage() {
         </Link>
       </div>
 
-      <BrandList rows={results} fields={fields} showCategory={scope === 'all'} />
+      <BrandList rows={pageRows} fields={fields} showCategory={scope === 'all'} />
+
+      <Pagination
+        page={safePage}
+        pageCount={pageCount}
+        onChange={(next) => {
+          setPage(next)
+          // Иначе человек оказывается в середине новой страницы.
+          window.scrollTo({ top: 0 })
+        }}
+      />
     </>
   )
 }

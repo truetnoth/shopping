@@ -129,6 +129,26 @@ export async function archiveBrand(input: {
 }
 
 /**
+ * Полное удаление, в отличие от архива: строка исчезает из базы насовсем.
+ * RLS на delete отказ не возвращает — без прав просто не удалится ни одной
+ * строки, что неотличимо от успеха, поэтому проверяем ответ .select().
+ */
+export async function deleteBrand(input: { category: CategoryId; id: string }): Promise<void> {
+  await requireSession()
+
+  const { data, error } = await supabase
+    .from(tableOf(input.category))
+    .delete()
+    .eq('id', input.id)
+    .select()
+
+  if (error) throw toApiError(error, 'Не удалось удалить бренд')
+  if (!data || !data.length) {
+    throw new ApiError(ERR_NOT_FOUND, 'Бренд не удалён — возможно, его уже удалили')
+  }
+}
+
+/**
  * Общая часть update и archive. Условие `.eq('updated_at', baseUpdatedAt)` —
  * это оптимистичная блокировка: если строку уже поправили, под условие не
  * попадёт ни одной записи и мы не затрём чужие изменения молча.
