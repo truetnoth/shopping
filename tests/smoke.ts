@@ -11,6 +11,7 @@ import {
 import { pageItems } from '../src/lib/paginate'
 import { buildIndex, runSearch } from '../src/lib/search'
 import { cyrToLat, phoneticKey } from '../src/lib/translit'
+import { isClockSkew } from '../src/lib/clock'
 
 const f = (column: string, extra: Partial<FieldDef> = {}): FieldDef => ({
   column, label: column, type: 'text', options: [], required: false,
@@ -190,6 +191,18 @@ check('дубль в другой раскладке (Новая)', similar('Н�
 check('нового бренда в базе нет', similar('Совсем новый'), [])
 check('сама строка не считается своим дублем', similar('Anka', 'Anka'), [])
 check('пустое имя дублей не ищет', similar('   '), [])
+
+/* ------------------------------------------------- расхождение часов у серверов */
+
+// Отдельного кода у этой ошибки нет, распознаём по тексту — значит, текст надо
+// проверять. Первое сообщение — то самое, что ловила редакция при открытии сайта.
+check('токен «из будущего»', isClockSkew('JWT issued at future'), true)
+check('токен ещё не действует', isClockSkew('JWT not yet valid'), true)
+check('вариант формулировки', isClockSkew('token used before issued'), true)
+// А эти лечатся входом заново, повторять их бессмысленно.
+check('протухший токен — не часы', isClockSkew('JWT expired'), false)
+check('битая подпись — не часы', isClockSkew('JWT cryptographic operation failed'), false)
+check('отказ RLS — не часы', isClockSkew('permission denied for view brand_fields'), false)
 
 if (failures) throw new Error(`${failures} проверок упало`)
 console.log('\nвсе проверки прошли')

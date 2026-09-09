@@ -1,5 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 import { CATEGORIES, tableOf } from '../lib/categories'
+import { CLOCK_RETRY_DELAYS, isClockSkew, wait } from '../lib/clock'
 import { CONFIG_ERROR, configured, supabase } from '../lib/supabase'
 import type { BrandRow, CategoryId, Dataset, FieldDef, FieldType, WriteResult } from './types'
 
@@ -7,6 +8,8 @@ export const ERR_UNAUTHORIZED = 401
 export const ERR_NOT_FOUND = 404
 export const ERR_CONFLICT = 409
 export const ERR_DUPLICATE = 422
+/** Часы серверов разошлись: лечится повтором, а не входом заново. */
+export const ERR_CLOCK_SKEW = 425
 
 export class ApiError extends Error {
   code: number
@@ -48,8 +51,8 @@ export async function fetchDataset(): Promise<Dataset> {
   if (!configured) throw new ApiError(500, CONFIG_ERROR)
 
   const [fieldsResult, ...rowResults] = await Promise.all([
-    supabase.from('brand_fields').select('*').order('sort_order'),
-    ...CATEGORIES.map((c) => supabase.from(c.table).select('*').order('name')),
+    retryOnSkew(() => supabase.from('brand_fields').select('*').order('sort_order')),
+    ...CATEGORIES.map((c) => retryOnSkew(() => supabase.from(c.table).select('*').order('name'))),
   ])
 
   if (fieldsResult.error) throw toApiError(fieldsResult.error, 'Не удалось загрузить схему базы')
@@ -85,16 +88,18 @@ export async function createBrand(input: {
 }): Promise<WriteResult> {
   await requireSession()
 
-  const { data, error } = await supabase
-    .from(tableOf(input.category))
-    .insert({
-      ...toPayload(input.values, input.fields),
-      updated_at: new Date().toISOString(),
-      updated_by: input.author,
-      archived: false,
-    })
-    .select()
-    .single()
+  const { data, error } = await retryOnSkew(() =>
+    supabase
+      .from(tableOf(input.category))
+      .insert({
+        ...toPayload(input.values, input.fields),
+        updated_at: new Date().toISOString(),
+        updated_by: input.author,
+        archived: false,
+      })
+      .select()
+      .single(),
+  )
 
   if (error) throw toApiError(error, 'Не удалось добавить бренд')
   return { category: input.category, row: toRow(data as Record<string, unknown>, input.category) }
@@ -136,11 +141,9 @@ export async function archiveBrand(input: {
 export async function deleteBrand(input: { category: CategoryId; id: string }): Promise<void> {
   await requireSession()
 
-  const { data, error } = await supabase
-    .from(tableOf(input.category))
-    .delete()
-    .eq('id', input.id)
-    .select()
+  const { data, error } = await retryOnSkew(() =>
+    supabase.from(tableOf(input.category)).delete().eq('id', input.id).select(),
+  )
 
   if (error) throw toApiError(error, 'Не удалось удалить бренд')
   if (!data || !data.length) {
@@ -162,12 +165,14 @@ async function writeExisting(
   await requireSession()
   const table = tableOf(category)
 
-  const { data, error } = await supabase
-    .from(table)
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('updated_at', baseUpdatedAt)
-    .select()
+  const { data, error } = await retryOnSkew(() =>
+    supabase
+      .from(table)
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('updated_at', baseUpdatedAt)
+      .select(),
+  )
 
   if (error) throw toApiError(error, 'Не удалось сохранить изменения')
   if (data && data.length) {
@@ -175,7 +180,9 @@ async function writeExisting(
   }
 
   // Ноль изменённых строк: либо бренд успели поправить, либо он исчез.
-  const current = await supabase.from(table).select('*').eq('id', id).maybeSingle()
+  const current = await retryOnSkew(() =>
+    supabase.from(table).select('*').eq('id', id).maybeSingle(),
+  )
   if (current.error) throw toApiError(current.error, 'Не удалось сохранить изменения')
   if (!current.data) {
     throw new ApiError(ERR_NOT_FOUND, 'Бренд не найден — возможно, его удалили из базы')
@@ -190,6 +197,24 @@ async function writeExisting(
 // ---------------------------------------------------------------------------
 // Вспомогательное
 // ---------------------------------------------------------------------------
+
+/**
+ * Расхождение часов на серверах Supabase (см. lib/clock) — не отказ, а
+ * «попробуйте на секунду позже»: повторяем тот же запрос, пока токен не
+ * «состарится». Ответ postgrest-js кладёт ошибку в поле, а не бросает, поэтому
+ * смотрим на result.error.
+ */
+async function retryOnSkew<T extends { error: PostgrestError | null }>(
+  request: () => PromiseLike<T>,
+): Promise<T> {
+  let result = await request()
+  for (const delay of CLOCK_RETRY_DELAYS) {
+    if (!result.error || !isClockSkew(result.error.message)) break
+    await wait(delay)
+    result = await request()
+  }
+  return result
+}
 
 /**
  * RLS блокирует запись без входа, но update без прав возвращает не ошибку,
@@ -238,10 +263,19 @@ function toPayload(values: BrandRow, fields: FieldDef[]): Record<string, string>
 }
 
 function toApiError(error: PostgrestError, fallback: string): ApiError {
+  const message = error.message || fallback
+
+  // Разошедшиеся часы проверяем до PGRST301: код у них общий, но выкидывать
+  // редактора на экран пароля из-за чужих часов незачем — повторы уже не
+  // помогли, остаётся подождать.
+  if (isClockSkew(message)) {
+    return new ApiError(ERR_CLOCK_SKEW, 'Сервер базы разошёлся по часам — повторите через минуту')
+  }
+
   // 42501 — RLS не пустила, PGRST301 — протухший токен. Для пользователя это
   // одно и то же: нужно войти заново.
   if (error.code === '42501' || error.code === 'PGRST301') {
     return new ApiError(ERR_UNAUTHORIZED, 'Нужно войти под паролем редакции')
   }
-  return new ApiError(500, error.message || fallback)
+  return new ApiError(500, message)
 }
