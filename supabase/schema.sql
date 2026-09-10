@@ -88,7 +88,7 @@ create table if not exists public.field_defs (
   table_name   text not null,
   column_name  text not null,
   label        text,
-  type         text check (type in ('text','longtext','url','select','multiselect','number','date','bool')),
+  type         text check (type in ('text','longtext','url','select','multiselect','number','date','bool','openselect')),
   options      text[],
   required     boolean,
   searchable   boolean,
@@ -200,18 +200,18 @@ insert into public.field_defs
 values
   -- общее ядро
   ('*', 'name',           'Бренд',                  'text',        '{}',                                                                     true,  true,  true,  1),
-  ('*', 'url',            'Сайт',                   'url',         '{}',                                                                     false, true,  true,  2),
+  ('*', 'url',            'Сайт',                   'url',         '{}',                                                                     true,  true,  true,  2),
   ('*', 'audience',       'Для кого',               'multiselect', '{"Для женщин","Для мужчин"}',                                            false, true,  true,  4),
   ('*', 'price_tier',     'Ценовой сегмент',        'select',      '{"$","$$","$$$"}',                                                       false, false, true,  5),
   ('*', 'tags',           'Теги',                   'multiselect', '{}',                                                                     false, true,  true,  6),
-  ('*', 'city',           'Город',                  'select',      '{"Москва","Петербург","Екатеринбург","Нижний Новгород"}',                false, true,  true,  8),
-  ('*', 'country',        'Страна',                 'select',      '{"Россия"}',                                                             false, true,  true,  9),
+  ('*', 'city',           'Город',                  'openselect',  '{"Москва","Петербург","Екатеринбург","Нижний Новгород"}',                false, true,  true,  8),
+  ('*', 'country',        'Страна',                 'openselect',  '{"Россия"}',                                                             false, true,  true,  9),
   ('*', 'own_production', 'Есть своё производство', 'bool',        '{да}',                                                                   false, false, true,  10),
   ('*', 'handmade',       'Ручная работа',          'bool',        '{да}',                                                                   false, false, true,  11),
   ('*', 'founded_year',   'Год основания',          'number',      '{}',                                                                     false, false, true,  12),
 
   -- мода
-  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье"}', true,  true, true, 3),
+  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье","Украшения"}', true, true, true, 3),
   ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"Базовое","Акцентное"}',                                                 false, true, true, 7),
   ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"Кэжуал","Деловой стиль","Ледилайк","Аутдор","Ворквир","Авангард"}',      false, true, true, 6),
 

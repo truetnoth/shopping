@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { BrandRow, FieldDef } from '../api/types'
-import { boolPair, isTruthy, joinMulti, optionsWithOwn, splitMulti, validate } from '../lib/schema'
+import {
+  boolPair, isTruthy, joinMulti, normalizeOption, optionsWithOwn, splitMulti, validate,
+} from '../lib/schema'
 
 interface Props {
   fields: FieldDef[]
   initial: BrandRow
+  /** Вся база: из неё растут варианты открытых справочников (город, страна). */
+  rows: BrandRow[]
   submitLabel: string
   busy?: boolean
   /** Подсказка под названием: страница считает её по текущему вводу. */
@@ -19,11 +23,13 @@ interface Props {
  * поэтому новая колонка в таблице появляется здесь без правки кода.
  *
  * Справочники закрыты: варианты берутся только из field_defs, завести новое
- * значение из формы нельзя — состав свойств задаёт база.
+ * значение из формы нельзя — состав свойств задаёт база. Исключение — поля
+ * типа openselect: туда своё значение вписывается прямо из формы.
  */
 export function BrandForm({
   fields,
   initial,
+  rows,
   submitLabel,
   busy,
   renderNameNote,
@@ -54,8 +60,9 @@ export function BrandForm({
         // У списка кнопок нет одного «того самого» поля ввода, на которое мог бы
         // указывать label, поэтому заголовок такого поля — обычный заголовок
         // группы, а связь с кнопками держится на aria-labelledby.
-        const chips = field.type === 'select' || field.type === 'multiselect'
-        const options = chips ? optionsWithOwn(field, values[field.column] ?? '') : []
+        const chips =
+          field.type === 'select' || field.type === 'multiselect' || field.type === 'openselect'
+        const options = chips ? optionsWithOwn(field, values[field.column] ?? '', rows) : []
         const title = (
           <>
             {field.label}
@@ -74,7 +81,7 @@ export function BrandForm({
               <label htmlFor={id}>{title}</label>
             )}
 
-            {chips && !options.length ? (
+            {chips && !options.length && field.type !== 'openselect' ? (
               <p className="field__hint">Варианты пока не заданы в базе</p>
             ) : (
               <Control
@@ -141,6 +148,9 @@ function Control({
     case 'select':
       return <SingleSelect id={id} value={value} options={options} onChange={onChange} />
 
+    case 'openselect':
+      return <OpenSelect id={id} value={value} options={options} onChange={onChange} />
+
     case 'multiselect':
       return <MultiSelect id={id} value={value} options={options} onChange={onChange} />
 
@@ -192,6 +202,74 @@ function SingleSelect({
           {option}
         </button>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Открытый справочник: те же кнопки плюс «+ Другой». Нового города в списке
+ * может не быть — тогда его вписывают руками, и со следующей загрузки базы он
+ * станет кнопкой у всей редакции (варианты считаются и по самим данным).
+ */
+function OpenSelect({
+  id,
+  value,
+  options,
+  onChange,
+}: {
+  id: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const add = () => {
+    const next = normalizeOption(draft ?? '', options)
+    // Пустой ввод — просто закрыть поле, а не стереть уже выбранное значение.
+    if (next) onChange(next)
+    setDraft(null)
+  }
+
+  return (
+    <div className="chips" role="group" aria-labelledby={`${id}-title`}>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className={`chip${value === option ? ' chip--on' : ''}`}
+          onClick={() => onChange(value === option ? '' : option)}
+        >
+          {option}
+        </button>
+      ))}
+
+      {draft === null ? (
+        <button type="button" className="chip" onClick={() => setDraft('')}>
+          + Другой
+        </button>
+      ) : (
+        <span className="chips__add">
+          <input
+            id={id}
+            autoFocus
+            value={draft}
+            aria-label="Своё значение"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter внутри формы иначе отправил бы её целиком.
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                add()
+              }
+              if (e.key === 'Escape') setDraft(null)
+            }}
+          />
+          <button type="button" className="btn btn--small" onClick={add}>
+            Добавить
+          </button>
+        </span>
+      )}
     </div>
   )
 }

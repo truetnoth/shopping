@@ -1,14 +1,16 @@
-import type { FieldDef } from '../api/types'
-import { splitFilters } from '../lib/schema'
+import type { BrandRow, FieldDef } from '../api/types'
+import { optionsWithOwn, splitFilters } from '../lib/schema'
 import type { Filters } from '../lib/schema'
 
 interface Props {
   fields: FieldDef[]
+  /** Строки текущей выдачи: из них берутся варианты открытых справочников. */
+  rows: BrandRow[]
   filters: Filters
   onChange: (filters: Filters) => void
 }
 
-export function FilterChips({ fields, filters, onChange }: Props) {
+export function FilterChips({ fields, rows, filters, onChange }: Props) {
   // Главные фильтры видно сразу, остальные — под раскрывашкой: на экране
   // одновременно нужны категория, «Для кого» и цена, а не восемь групп разом.
   const { primary, extra } = splitFilters(fields)
@@ -46,8 +48,10 @@ export function FilterChips({ fields, filters, onChange }: Props) {
           .map((field) => {
             // Варианты — только те, что прописаны в field_defs. Раньше сюда
             // подмешивались значения из данных, и опечатка в одной строке
-            // («Нижнее бельё») сразу становилась вариантом фильтра.
-            const options = field.options
+            // («Нижнее бельё») сразу становилась вариантом фильтра. Исключение
+            // одно — открытый справочник: город, вписанный из формы, обязан
+            // появиться и в фильтре, иначе искать по нему нечем.
+            const options = optionsWithOwn(field, '', rows)
             if (options.length < 2) return null
 
             return (

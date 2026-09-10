@@ -68,6 +68,7 @@ export function EditPage() {
         key={row.updated_at}
         fields={fields}
         initial={row}
+        rows={rows}
         submitLabel="Сохранить"
         renderNameNote={(name) => (
           <SimilarNote rows={findSimilar(rows, fields, name, row.id)} fields={fields} />

@@ -59,7 +59,12 @@ export function NewPage() {
         createBrand({ category, author: creds.author, fields, values }),
       )
       toast('Бренд добавлен в базу')
-      navigate(`/brand/${category}/${encodeURIComponent(result.row.id)}`, { replace: true })
+      // Метка для карточки: она покажет «На главную» вместо «Назад» — шага
+      // «Новый бренд» в истории уже нет, возвращаться по ней некуда.
+      navigate(`/brand/${category}/${encodeURIComponent(result.row.id)}`, {
+        replace: true,
+        state: { from: 'new' },
+      })
     } catch (err) {
       if (err instanceof Error && err.message === 'Отменено') return
       toast(err instanceof Error ? err.message : 'Не удалось сохранить', 'error')
@@ -72,6 +77,7 @@ export function NewPage() {
       <BrandForm
         fields={fields}
         initial={emptyValues(fields)}
+        rows={rows}
         renderNameNote={(name) => (
           <SimilarNote rows={findSimilar(rows, fields, name)} fields={fields} />
         )}

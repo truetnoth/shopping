@@ -5,7 +5,7 @@
  */
 import type { BrandRow, FieldDef } from '../src/api/types'
 import {
-  applyFilters, boolPair, coreFields, findSimilar, optionsWithOwn,
+  applyFilters, boolPair, coreFields, findSimilar, normalizeOption, optionsWithOwn,
   splitFilters, splitMulti, urlField, validate,
 } from '../src/lib/schema'
 import { pageItems } from '../src/lib/paginate'
@@ -95,6 +95,25 @@ check('своё значение вне справочника не теряет
 check('то же для поля с одним значением', optionsWithOwn(fields[3], '4'), ['$', '$$', '$$$', '4'])
 check('поле без вариантов в базе их и не получит', optionsWithOwn(fields[6], ''), [])
 check('разбор мультизначения', splitMulti('Одежда,  Верхняя одежда ,,Сумки'), ['Одежда', 'Верхняя одежда', 'Сумки'])
+
+// Открытый справочник — единственное исключение из закрытости: к вариантам из
+// схемы он добавляет всё, что уже встречается в данных. Так вписанный из формы
+// город становится кнопкой у всей редакции, без правки field_defs.
+const cityOpen = f('Город', { type: 'openselect', options: ['Москва', 'Нижний Новгород'] })
+check(
+  'открытый справочник растёт из данных',
+  optionsWithOwn(cityOpen, '', rows),
+  ['Москва', 'Нижний Новгород', 'Петербург'],
+)
+check(
+  'вписанное значение строки не дублируется',
+  optionsWithOwn(cityOpen, 'Петербург', rows),
+  ['Москва', 'Нижний Новгород', 'Петербург'],
+)
+check('закрытый справочник данные не подхватывает', optionsWithOwn(fields[8], '', rows), [])
+check('своё написание приводится к известному', normalizeOption(' казань ', ['Казань']), 'Казань')
+check('новое значение только обрезается', normalizeOption('  Казань', ['Москва']), 'Казань')
+check('пустой ввод ничего не задаёт', normalizeOption('   ', ['Москва']), '')
 check('булево пишется как в таблице', boolPair(fields[7]), ['да', ''])
 check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FALSE'])
 
@@ -110,7 +129,7 @@ const ordered: FieldDef[] = [
   f('Для кого', { type: 'multiselect', order: 4 }),
   f('Ценовой сегмент', { type: 'select', order: 5 }),
   f('Теги', { type: 'multiselect', order: 6 }),
-  f('Город', { type: 'select', order: 8 }),
+  f('Город', { type: 'openselect', order: 8 }),
   f('Ручная работа', { type: 'bool', order: 11 }),
   f('Год основания', { type: 'number', order: 12 }),
 ]
@@ -126,6 +145,13 @@ check('без url-поля ссылки нет', urlField([f('Бренд')]), un
 check('обязательное поле', validate(fields, { 'Бренд': '' }).errors['Бренд'], 'Обязательное поле')
 check('битая ссылка', validate(fields, { 'Бренд': 'X', 'Ссылка': 'ame-store.ru' }).errors['Ссылка'], 'Ссылка должна начинаться с http:// или https://')
 check('валидная строка', validate(fields, { 'Бренд': 'X', 'Ссылка': 'https://ame-store.ru' }).ok, true)
+
+// Сайт бренда стал обязательным — флаг приходит из field_defs, проверка общая.
+const withRequiredUrl = fields.map((field) =>
+  field.column === 'Ссылка' ? { ...field, required: true } : field,
+)
+check('сайт обязателен', validate(withRequiredUrl, { 'Бренд': 'X', 'Ссылка': '' }).errors['Ссылка'], 'Обязательное поле')
+check('с сайтом сохраняется', validate(withRequiredUrl, { 'Бренд': 'X', 'Ссылка': 'https://ame-store.ru' }).ok, true)
 
 /* ------------------------------------------- три категории: ядро и общий поиск */
 

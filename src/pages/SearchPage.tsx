@@ -123,7 +123,7 @@ export function SearchPage() {
 
       <SearchBar value={query} onChange={setQuery} total={visibleRows.length} found={results.length} />
 
-      <FilterChips fields={fields} filters={filters} onChange={setFilters} />
+      <FilterChips fields={fields} rows={visibleRows} filters={filters} onChange={setFilters} />
 
       <div className="toolbar">
         <label className="checkbox">

@@ -4,6 +4,8 @@ export type FieldType =
   | 'url'
   | 'select'
   | 'multiselect'
+  /** Справочник, в который можно дописать своё значение прямо из формы. */
+  | 'openselect'
   | 'number'
   | 'date'
   | 'bool'

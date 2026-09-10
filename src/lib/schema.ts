@@ -36,15 +36,52 @@ export function brandName(row: BrandRow, fields: FieldDef[]): string {
  * базе (там он осмысленный: $ · $$ · $$$). Плюс значения, которые уже стоят в
  * строке, но из справочника исчезли: снять их можно, а вот молча стереть при
  * сохранении — нет.
+ *
+ * Исключение — открытый справочник (openselect): к вариантам из базы он
+ * добавляет всё, что уже встречается в переданных строках. Так вписанный из
+ * формы город становится кнопкой у всей редакции, не требуя правки field_defs.
  */
-export function optionsWithOwn(field: FieldDef, value: string): string[] {
+export function optionsWithOwn(field: FieldDef, value: string, rows: BrandRow[] = []): string[] {
+  const base = field.type === 'openselect'
+    ? [...field.options, ...valuesInUse(field, rows).filter((v) => !field.options.includes(v))]
+    : field.options
+
   const own = field.type === 'multiselect' ? splitMulti(value) : [String(value ?? '').trim()]
-  const extra = own.filter((v) => v && !field.options.includes(v))
-  return extra.length ? [...field.options, ...extra] : field.options
+  const extra = own.filter((v) => v && !base.includes(v))
+  return extra.length ? [...base, ...extra] : base
+}
+
+/** Значения колонки, реально встречающиеся в базе, — по алфавиту и без дублей. */
+export function valuesInUse(field: FieldDef, rows: BrandRow[]): string[] {
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const cell = row[field.column]
+    const values = field.type === 'multiselect' ? splitMulti(cell) : [String(cell ?? '').trim()]
+    for (const value of values) if (value) seen.add(value)
+  }
+  return Array.from(seen).sort((a, b) => a.localeCompare(b, 'ru'))
+}
+
+/**
+ * Значение, вписанное в открытый справочник руками. Если такое уже есть с другим
+ * регистром — возвращаем известное написание: именно из-за «казань» рядом с
+ * «Казань» открытые списки когда-то и закрыли.
+ */
+export function normalizeOption(input: string, options: string[]): string {
+  const value = String(input ?? '').trim()
+  if (!value) return ''
+  const known = options.find((o) => o.toLowerCase() === value.toLowerCase())
+  return known ?? value
 }
 
 export function filterableFields(fields: FieldDef[]): FieldDef[] {
-  return fields.filter((f) => f.type === 'select' || f.type === 'multiselect' || f.type === 'bool')
+  return fields.filter(
+    (f) =>
+      f.type === 'select' ||
+      f.type === 'multiselect' ||
+      f.type === 'openselect' ||
+      f.type === 'bool',
+  )
 }
 
 /** Ссылка на сайт бренда — первое поле типа url; по имени колонку не ищем. */

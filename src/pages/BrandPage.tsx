@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, ERR_CONFLICT, archiveBrand, deleteBrand } from '../api/client'
 import { useToast } from '../components/Toast'
 import { categoryLabel, isCategoryId } from '../lib/categories'
@@ -10,6 +10,9 @@ import type { BrandRow, FieldDef } from '../api/types'
 export function BrandPage() {
   const { category, id = '' } = useParams()
   const navigate = useNavigate()
+  // Карточку открывают либо из списка, либо сразу после создания бренда —
+  // NewPage помечает свой переход, потому что уходит с заменой истории.
+  const fromNew = useLocation().state?.from === 'new'
   const { data, getById, applyRow, removeRow } = useBrands()
   const { run, busy } = useWrite()
   const toast = useToast()
@@ -77,9 +80,6 @@ export function BrandPage() {
     <article className="brand">
       <header className="brand__header">
         <div className="brand__title">
-          <button className="btn btn--ghost btn--small" onClick={() => navigate(-1)}>
-            ← Назад
-          </button>
           <h1>
             {brandName(row, fields)}
             <span className="badge badge--muted">{categoryLabel(category)}</span>
@@ -119,6 +119,15 @@ export function BrandPage() {
         {row.updated_at && <span>Изменено: {formatDate(row.updated_at)}</span>}
         {row.updated_by && <span> · {row.updated_by}</span>}
       </footer>
+
+      <div className="brand__back">
+        <button
+          className="btn btn--ghost"
+          onClick={() => (fromNew ? navigate('/') : navigate(-1))}
+        >
+          ← {fromNew ? 'На главную' : 'Назад'}
+        </button>
+      </div>
     </article>
   )
 }
