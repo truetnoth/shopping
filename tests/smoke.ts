@@ -5,8 +5,8 @@
  */
 import type { BrandRow, FieldDef } from '../src/api/types'
 import {
-  applyFilters, boolPair, coreFields, findSimilar, normalizeOption, optionsWithOwn,
-  splitFilters, splitMulti, urlField, validate,
+  applyFilters, boolPair, coreFields, filterGroups, findSimilar, normalizeOption,
+  optionsWithOwn, splitFilters, splitMulti, urlField, validate,
 } from '../src/lib/schema'
 import { pageItems } from '../src/lib/paginate'
 import { buildIndex, runSearch } from '../src/lib/search'
@@ -138,6 +138,36 @@ const columns = (list: FieldDef[]) => list.map((field) => field.column)
 
 check('главные фильтры — начало схемы', columns(splitFilters(ordered).primary), ['Категория', 'Для кого', 'Ценовой сегмент'])
 check('остальные фильтры — под раскрывашкой', columns(splitFilters(ordered).extra), ['Теги', 'Город', 'Ручная работа'])
+
+/**
+ * Галочки рисуются не по отдельности, а одной группой «Особенности», и она
+ * встаёт туда, где стоит первая из них. Порядок как в лайфстайле после правки
+ * критериев: «Маркетплейс» редакция просила первым среди дополнительных
+ * фильтров, и с концевой группой он уезжал бы под «Зоны» и «Город».
+ */
+const lifestyle: FieldDef[] = [
+  f('Бренд', { isName: true, order: 1 }),
+  f('Сайт', { type: 'url', order: 2 }),
+  f('Категория', { type: 'multiselect', order: 3 }),
+  f('Предназначение', { type: 'multiselect', order: 4 }),
+  f('Ценовой сегмент', { type: 'select', order: 5 }),
+  f('Маркетплейс', { type: 'bool', options: ['да'], order: 6 }),
+  f('Зоны', { type: 'multiselect', order: 7 }),
+  f('Город', { type: 'openselect', order: 10 }),
+  f('Ручная работа', { type: 'bool', options: ['да'], order: 13 }),
+]
+
+const groupNames = (list: FieldDef[]) =>
+  filterGroups(list).map((group) => (group.kind === 'bools' ? 'Особенности' : group.field.column))
+
+const boolsIn = (list: FieldDef[]) =>
+  filterGroups(list).flatMap((group) => (group.kind === 'bools' ? columns(group.fields) : []))
+
+check('видимые фильтры лайфстайла', columns(splitFilters(lifestyle).primary), ['Категория', 'Предназначение', 'Ценовой сегмент'])
+check('«Особенности» встают по первой галочке', groupNames(splitFilters(lifestyle).extra), ['Особенности', 'Зоны', 'Город'])
+check('«Маркетплейс» — первый чип в «Особенностях»', boolsIn(splitFilters(lifestyle).extra), ['Маркетплейс', 'Ручная работа'])
+check('без галочек группы «Особенности» нет', groupNames([f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны'])
+check('группы идут по порядку полей, а не по списку', groupNames([f('Город', { type: 'openselect', order: 10 }), f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны', 'Город'])
 
 check('сайт бренда — первое поле типа url', urlField(fields)?.column, 'Ссылка')
 check('без url-поля ссылки нет', urlField([f('Бренд')]), undefined)

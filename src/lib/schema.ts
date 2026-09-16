@@ -106,6 +106,35 @@ export function splitFilters(fields: FieldDef[]): { primary: FieldDef[]; extra: 
   }
 }
 
+export type FilterGroup =
+  | { kind: 'field'; order: number; field: FieldDef }
+  | { kind: 'bools'; order: number; fields: FieldDef[] }
+
+/**
+ * Фильтры, разложенные по группам в порядке полей. Обычное поле даёт свою
+ * группу, а все булевы собираются в одну общую — «Особенности»: по отдельности
+ * они рисовались группой без заголовка и читались как продолжение предыдущего
+ * фильтра.
+ *
+ * Общая группа встаёт туда, где стоит первая её галочка, а не в конец списка.
+ * Иначе порядок полей для галочек не решал бы ничего: «Маркетплейс», который
+ * редакция просила первым среди дополнительных фильтров, всё равно уезжал бы
+ * под «Теги», «Характеристику», «Город» и «Страну».
+ */
+export function filterGroups(fields: FieldDef[]): FilterGroup[] {
+  const bools = fields.filter((f) => f.type === 'bool')
+
+  const groups: FilterGroup[] = fields
+    .filter((f) => f.type !== 'bool')
+    .map((field) => ({ kind: 'field', order: field.order, field }))
+
+  if (bools.length) {
+    groups.push({ kind: 'bools', order: Math.min(...bools.map((f) => f.order)), fields: bools })
+  }
+
+  return groups.sort((a, b) => a.order - b.order)
+}
+
 /**
  * Чем булево поле записывается обратно в таблицу. В базе брендов галочки
  * проставлены словом «да» при пустой ячейке вместо «нет» — конвенция задаётся

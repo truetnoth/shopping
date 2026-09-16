@@ -1,5 +1,5 @@
 import type { BrandRow, FieldDef } from '../api/types'
-import { optionsWithOwn, splitFilters } from '../lib/schema'
+import { filterGroups, optionsWithOwn, splitFilters } from '../lib/schema'
 import type { Filters } from '../lib/schema'
 
 interface Props {
@@ -33,51 +33,16 @@ export function FilterChips({ fields, rows, filters, onChange }: Props) {
   const extraCount = countIn(extra)
   const activeCount = countIn(primary) + extraCount
 
-  /**
-   * Обычное поле даёт свою группу, а все булевы собираются в одну общую —
-   * «Особенности». По отдельности они рисовались группой без заголовка и
-   * читались как продолжение предыдущего фильтра.
-   */
-  const groups = (list: FieldDef[]) => {
-    const bools = list.filter((field) => field.type === 'bool')
-
-    return (
-      <>
-        {list
-          .filter((field) => field.type !== 'bool')
-          .map((field) => {
-            // Варианты — только те, что прописаны в field_defs. Раньше сюда
-            // подмешивались значения из данных, и опечатка в одной строке
-            // («Нижнее бельё») сразу становилась вариантом фильтра. Исключение
-            // одно — открытый справочник: город, вписанный из формы, обязан
-            // появиться и в фильтре, иначе искать по нему нечем.
-            const options = optionsWithOwn(field, '', rows)
-            if (options.length < 2) return null
-
-            return (
-              <div key={field.column} className="filters__group">
-                <span className="filters__label">{field.label}</span>
-                <div className="chips">
-                  {options.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className={chipClass(field.column, option)}
-                      onClick={() => toggle(field.column, option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-
-        {bools.length > 0 && (
-          <div className="filters__group">
+  // Раскладка групп живёт в lib/schema: галочки идут одной группой
+  // «Особенности», и стоит она там, где в порядке полей стоит первая из них.
+  const groups = (list: FieldDef[]) =>
+    filterGroups(list).map((group) => {
+      if (group.kind === 'bools') {
+        return (
+          <div key="bools" className="filters__group">
             <span className="filters__label">Особенности</span>
             <div className="chips">
-              {bools.map((field) => (
+              {group.fields.map((field) => (
                 <button
                   key={field.column}
                   type="button"
@@ -89,10 +54,36 @@ export function FilterChips({ fields, rows, filters, onChange }: Props) {
               ))}
             </div>
           </div>
-        )}
-      </>
-    )
-  }
+        )
+      }
+
+      // Варианты — только те, что прописаны в field_defs. Раньше сюда
+      // подмешивались значения из данных, и опечатка в одной строке
+      // («Нижнее бельё») сразу становилась вариантом фильтра. Исключение
+      // одно — открытый справочник: город, вписанный из формы, обязан
+      // появиться и в фильтре, иначе искать по нему нечем.
+      const { field } = group
+      const options = optionsWithOwn(field, '', rows)
+      if (options.length < 2) return null
+
+      return (
+        <div key={field.column} className="filters__group">
+          <span className="filters__label">{field.label}</span>
+          <div className="chips">
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={chipClass(field.column, option)}
+                onClick={() => toggle(field.column, option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      )
+    })
 
   return (
     <div className="filters">

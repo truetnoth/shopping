@@ -24,14 +24,18 @@ create table if not exists public.brands_fashion (
   city            text not null default '',
   founded_year    text not null default '',
   price_tier      text not null default '',
-  audience        text not null default '',
-  tags            text not null default '',
   own_production  text not null default '',
   handmade        text not null default '',
+  marketplace     text not null default '',
+  zhp             text not null default '',
+  contact         text not null default '',
 
   -- своё
+  audience        text not null default '',
+  tags            text not null default '',
   fashion_kind    text not null default '',
-  style_role      text not null default ''
+  style_role      text not null default '',
+  multibrand      text not null default ''
 );
 
 create table if not exists public.brands_lifestyle (
@@ -46,12 +50,22 @@ create table if not exists public.brands_lifestyle (
   city            text not null default '',
   founded_year    text not null default '',
   price_tier      text not null default '',
-  audience        text not null default '',
-  tags            text not null default '',
   own_production  text not null default '',
   handmade        text not null default '',
+  marketplace     text not null default '',
+  zhp             text not null default '',
+  contact         text not null default '',
 
-  lifestyle_kind  text not null default ''
+  lifestyle_kind  text not null default '',
+  purpose         text not null default '',
+  zones           text not null default '',
+  -- Та же колонка, что «Характеристика» в моде, но справочник свой:
+  -- «попроще / дизайнерское» вместо «Базовое / Акцентное».
+  style_role      text not null default '',
+  multibrand      text not null default '',
+  vintage         text not null default '',
+  private_label   text not null default '',
+  notes           text not null default ''
 );
 
 create table if not exists public.brands_beauty (
@@ -66,13 +80,15 @@ create table if not exists public.brands_beauty (
   city            text not null default '',
   founded_year    text not null default '',
   price_tier      text not null default '',
-  audience        text not null default '',
-  tags            text not null default '',
   own_production  text not null default '',
   handmade        text not null default '',
+  marketplace     text not null default '',
+  zhp             text not null default '',
+  contact         text not null default '',
 
   beauty_kind     text not null default '',
-  cruelty_free    text not null default ''
+  notes           text not null default '',
+  marks           text not null default ''
 );
 
 -- ---------------------------------------------------------------------------
@@ -194,33 +210,54 @@ grant insert, update, delete on public.brands_fashion, public.brands_lifestyle, 
 -- ---------------------------------------------------------------------------
 -- 5. Стартовые описания полей
 -- ---------------------------------------------------------------------------
+-- Порядок задаёт сразу две вещи: как поля идут в форме и в карточке и какие
+-- фильтры видно на экране поиска без раскрывашки (всё до 5-го включительно).
+-- Отсюда «Маркетплейс» под номером 6 — редакция просила его первым среди
+-- дополнительных фильтров во всех трёх разделах.
+--
+--   1 Бренд                 6 Маркетплейс        11 Страна             16 Контакт
+--   2 Сайт                  7 Теги / Зоны        12 Своё производство  17 Винтаж
+--   3 Категория/Критерии     8 Характеристика     13 Ручная работа      18 СТМ
+--   4 Для кого/Назначение    9 Мультибренд        14 ЖП                 19 Примечания
+--   5 Ценовой сегмент      10 Город              15 Год основания      20 Пометки
 
 insert into public.field_defs
   (table_name, column_name, label, type, options, required, searchable, show_in_card, sort_order)
 values
   -- общее ядро
-  ('*', 'name',           'Бренд',                  'text',        '{}',                                                                     true,  true,  true,  1),
-  ('*', 'url',            'Сайт',                   'url',         '{}',                                                                     true,  true,  true,  2),
-  ('*', 'audience',       'Для кого',               'multiselect', '{"Для женщин","Для мужчин"}',                                            false, true,  true,  4),
-  ('*', 'price_tier',     'Ценовой сегмент',        'select',      '{"$","$$","$$$"}',                                                       false, false, true,  5),
-  ('*', 'tags',           'Теги',                   'multiselect', '{}',                                                                     false, true,  true,  6),
-  ('*', 'city',           'Город',                  'openselect',  '{"Москва","Петербург","Екатеринбург","Нижний Новгород"}',                false, true,  true,  8),
-  ('*', 'country',        'Страна',                 'openselect',  '{"Россия"}',                                                             false, true,  true,  9),
-  ('*', 'own_production', 'Есть своё производство', 'bool',        '{да}',                                                                   false, false, true,  10),
-  ('*', 'handmade',       'Ручная работа',          'bool',        '{да}',                                                                   false, false, true,  11),
-  ('*', 'founded_year',   'Год основания',          'number',      '{}',                                                                     false, false, true,  12),
+  ('*', 'name',           'Бренд',                  'text',        '{}',                                                      true,  true,  true,  1),
+  ('*', 'url',            'Сайт',                   'url',         '{}',                                                      true,  true,  true,  2),
+  ('*', 'audience',       'Для кого',               'multiselect', '{"Для женщин","Для мужчин"}',                             false, true,  true,  4),
+  ('*', 'price_tier',     'Ценовой сегмент',        'select',      '{"$","$$","$$$"}',                                        false, false, true,  5),
+  ('*', 'marketplace',    'Маркетплейс',            'bool',        '{да}',                                                    false, false, true,  6),
+  ('*', 'multibrand',     'Мультибренд',            'bool',        '{да}',                                                    false, false, true,  9),
+  ('*', 'city',           'Город',                  'openselect',  '{"Москва","Петербург","Екатеринбург","Нижний Новгород"}', false, true,  true,  10),
+  ('*', 'country',        'Страна',                 'openselect',  '{"Россия"}',                                              false, true,  true,  11),
+  ('*', 'own_production', 'Есть своё производство', 'bool',        '{да}',                                                    false, false, true,  12),
+  ('*', 'handmade',       'Ручная работа',          'bool',        '{да}',                                                    false, false, true,  13),
+  -- Сокращение редакции, расшифровывать не просили: подпись правится одной
+  -- строкой здесь и меняется на сайте без пересборки.
+  ('*', 'zhp',            'ЖП',                     'bool',        '{да}',                                                    false, false, true,  14),
+  ('*', 'founded_year',   'Год основания',          'number',      '{}',                                                      false, false, true,  15),
+  ('*', 'contact',        'Контакт',                'text',        '{}',                                                      false, true,  true,  16),
+  ('*', 'notes',          'Примечания',             'longtext',    '{}',                                                      false, true,  true,  19),
+  ('*', 'marks',          'Пометки',                'text',        '{}',                                                      false, true,  true,  20),
 
   -- мода
-  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье","Украшения"}', true, true, true, 3),
-  ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"Базовое","Акцентное"}',                                                 false, true, true, 7),
-  ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"Кэжуал","Деловой стиль","Ледилайк","Аутдор","Ворквир","Авангард"}',      false, true, true, 6),
+  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье","Украшения"}', true,  true, true, 3),
+  ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"Кэжуал","Деловой стиль","Ледилайк","Аутдор","Ворквир","Авангард"}',                 false, true, true, 7),
+  ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"Базовое","Акцентное"}',                                                             false, true, true, 8),
 
-  -- лайфстайл (стартовый набор, правится из панели)
-  ('brands_lifestyle', 'lifestyle_kind', 'Тип',            'multiselect', '{"Мебель","Декор","Посуда","Текстиль","Ароматы","Канцелярия"}',           true,  true, true, 3),
+  -- лайфстайл
+  ('brands_lifestyle', 'lifestyle_kind', 'Категория',      'multiselect', '{"посуда","декор","мебель","хобби","уборка","текстиль","освещение","хранение","растения"}', true,  true, true, 3),
+  ('brands_lifestyle', 'purpose',        'Предназначение', 'multiselect', '{"для работы","для учебы","для путешествий","для дома"}',                                  false, true, true, 4),
+  ('brands_lifestyle', 'zones',          'Зоны',           'multiselect', '{"кухня","ванная","гостиная","спальня","дача","сад"}',                                     false, true, true, 7),
+  ('brands_lifestyle', 'style_role',     'Характеристика', 'select',      '{"попроще","дизайнерское"}',                                                               false, true, true, 8),
+  ('brands_lifestyle', 'vintage',        'Винтаж',         'bool',        '{да}',                                                                                     false, false, true, 17),
+  ('brands_lifestyle', 'private_label',  'СТМ',            'bool',        '{да}',                                                                                     false, false, true, 18),
 
-  -- красота (стартовый набор, правится из панели)
-  ('brands_beauty',    'beauty_kind',    'Тип',            'multiselect', '{"Уход за лицом","Уход за телом","Волосы","Макияж","Парфюмерия"}',        true,  true, true, 3),
-  ('brands_beauty',    'cruelty_free',   'Не тестируют на животных', 'bool', '{да}',                                                                 false, false, true, 7)
+  -- красота
+  ('brands_beauty',    'beauty_kind',    'Критерии',       'multiselect', '{"Уход","Макияж","Для волос","Для лица","Для тела","Мужское","Парфюм","Бытовая химия","Для детей","Для подростков","Личная гигиена","Тревел"}', true, true, true, 3)
 on conflict (table_name, column_name) do update set
   label        = excluded.label,
   type         = excluded.type,
