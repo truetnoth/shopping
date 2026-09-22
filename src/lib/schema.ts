@@ -31,22 +31,33 @@ export function brandName(row: BrandRow, fields: FieldDef[]): string {
   return field ? row[field.column] || '(без названия)' : '(без названия)'
 }
 
+/** Справочник, в который значения можно дописывать прямо из формы. */
+export function isOpen(field: FieldDef): boolean {
+  return field.type === 'openselect' || field.type === 'openmulti'
+}
+
+/** Справочник, в котором значений можно выбрать несколько (лежат через запятую). */
+export function isMulti(field: FieldDef): boolean {
+  return field.type === 'multiselect' || field.type === 'openmulti'
+}
+
 /**
  * Кнопки справочника в форме: варианты берёт только field_defs, порядок — как в
  * базе (там он осмысленный: $ · $$ · $$$). Плюс значения, которые уже стоят в
  * строке, но из справочника исчезли: снять их можно, а вот молча стереть при
  * сохранении — нет.
  *
- * Исключение — открытый справочник (openselect): к вариантам из базы он
- * добавляет всё, что уже встречается в переданных строках. Так вписанный из
- * формы город становится кнопкой у всей редакции, не требуя правки field_defs.
+ * Исключение — открытые справочники (openselect и openmulti): к вариантам из
+ * базы они добавляют всё, что уже встречается в переданных строках. Так
+ * вписанный из формы город становится кнопкой у всей редакции, не требуя
+ * правки field_defs.
  */
 export function optionsWithOwn(field: FieldDef, value: string, rows: BrandRow[] = []): string[] {
-  const base = field.type === 'openselect'
+  const base = isOpen(field)
     ? [...field.options, ...valuesInUse(field, rows).filter((v) => !field.options.includes(v))]
     : field.options
 
-  const own = field.type === 'multiselect' ? splitMulti(value) : [String(value ?? '').trim()]
+  const own = isMulti(field) ? splitMulti(value) : [String(value ?? '').trim()]
   const extra = own.filter((v) => v && !base.includes(v))
   return extra.length ? [...base, ...extra] : base
 }
@@ -56,7 +67,7 @@ export function valuesInUse(field: FieldDef, rows: BrandRow[]): string[] {
   const seen = new Set<string>()
   for (const row of rows) {
     const cell = row[field.column]
-    const values = field.type === 'multiselect' ? splitMulti(cell) : [String(cell ?? '').trim()]
+    const values = isMulti(field) ? splitMulti(cell) : [String(cell ?? '').trim()]
     for (const value of values) if (value) seen.add(value)
   }
   return Array.from(seen).sort((a, b) => a.localeCompare(b, 'ru'))
@@ -80,6 +91,7 @@ export function filterableFields(fields: FieldDef[]): FieldDef[] {
       f.type === 'select' ||
       f.type === 'multiselect' ||
       f.type === 'openselect' ||
+      f.type === 'openmulti' ||
       f.type === 'bool',
   )
 }
@@ -93,10 +105,10 @@ export function urlField(fields: FieldDef[]): FieldDef | undefined {
  * Граница между фильтрами, которые видно сразу, и теми, что лежат под
  * раскрывашкой. Порядок полей задаёт редакция в field_defs — значит, оттуда же
  * правится и состав главных фильтров, без единой правки кода. Сейчас в начале
- * стоят название (1), сайт (2), категория (3), «Для кого» (4) и сегмент (5);
- * фильтруются из них последние три.
+ * стоят название (1), сайт (2), категория (3), «Для кого» / «Предназначение»
+ * (4), сегмент (5) и «Мультибренд» (6); фильтруются из них последние четыре.
  */
-export const PRIMARY_FILTER_MAX_ORDER = 5
+export const PRIMARY_FILTER_MAX_ORDER = 6
 
 export function splitFilters(fields: FieldDef[]): { primary: FieldDef[]; extra: FieldDef[] } {
   const filterable = filterableFields(fields)
@@ -108,28 +120,54 @@ export function splitFilters(fields: FieldDef[]): { primary: FieldDef[]; extra: 
 
 export type FilterGroup =
   | { kind: 'field'; order: number; field: FieldDef }
-  | { kind: 'bools'; order: number; fields: FieldDef[] }
+  /** Пустой label — заголовка у группы нет, галочка стоит отдельной строкой. */
+  | { kind: 'bools'; order: number; label: string; fields: FieldDef[] }
 
 /**
  * Фильтры, разложенные по группам в порядке полей. Обычное поле даёт свою
- * группу, а все булевы собираются в одну общую — «Особенности»: по отдельности
- * они рисовались группой без заголовка и читались как продолжение предыдущего
- * фильтра.
+ * группу; галочка — тоже свою, без заголовка, если редакция не собрала её с
+ * другими через field_defs.filter_group.
+ *
+ * Умолчание тут «каждая сама по себе» намеренно: «Мультибренд», «Продается на
+ * маркетплейсе» и «ЖП» редакция просила видеть отдельными пунктами, а не в
+ * общей куче, — она путала их с остальными свойствами бренда. В кучу собраны
+ * только те, у кого filter_group совпал: производство, ручная работа, винтаж и
+ * СТМ под заголовком «Особенности».
  *
  * Общая группа встаёт туда, где стоит первая её галочка, а не в конец списка.
- * Иначе порядок полей для галочек не решал бы ничего: «Маркетплейс», который
- * редакция просила первым среди дополнительных фильтров, всё равно уезжал бы
- * под «Теги», «Характеристику», «Город» и «Страну».
+ * Иначе порядок полей для галочек не решал бы ничего: «Особенности» всегда
+ * уезжали бы под «Город» и «Страну».
  */
 export function filterGroups(fields: FieldDef[]): FilterGroup[] {
-  const bools = fields.filter((f) => f.type === 'bool')
+  const groups: FilterGroup[] = []
+  // Общие группы копим по имени, чтобы каждая встала по своей первой галочке.
+  const shared = new Map<string, Extract<FilterGroup, { kind: 'bools' }>>()
 
-  const groups: FilterGroup[] = fields
-    .filter((f) => f.type !== 'bool')
-    .map((field) => ({ kind: 'field', order: field.order, field }))
+  for (const field of fields) {
+    if (field.type !== 'bool') {
+      groups.push({ kind: 'field', order: field.order, field })
+      continue
+    }
 
-  if (bools.length) {
-    groups.push({ kind: 'bools', order: Math.min(...bools.map((f) => f.order)), fields: bools })
+    if (!field.filterGroup) {
+      groups.push({ kind: 'bools', order: field.order, label: '', fields: [field] })
+      continue
+    }
+
+    const group = shared.get(field.filterGroup)
+    if (group) {
+      group.fields.push(field)
+      group.order = Math.min(group.order, field.order)
+    } else {
+      const fresh = {
+        kind: 'bools' as const,
+        order: field.order,
+        label: field.filterGroup,
+        fields: [field],
+      }
+      shared.set(field.filterGroup, fresh)
+      groups.push(fresh)
+    }
   }
 
   return groups.sort((a, b) => a.order - b.order)
@@ -159,7 +197,7 @@ export function applyFilters(rows: BrandRow[], filters: Filters, fields: FieldDe
       const cell = row[column]
       // У булева поля чип один: он включён — значит нужны только строки с «да».
       if (field?.type === 'bool') return isTruthy(cell)
-      if (field?.type === 'multiselect') {
+      if (field && isMulti(field)) {
         const owned = splitMulti(cell)
         return wanted.some((w) => owned.includes(w))
       }

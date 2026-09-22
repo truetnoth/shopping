@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, ERR_CONFLICT, archiveBrand, deleteBrand } from '../api/client'
 import { useToast } from '../components/Toast'
 import { categoryLabel, isCategoryId } from '../lib/categories'
-import { brandName, isArchived, splitMulti } from '../lib/schema'
+import { brandName, isArchived, isMulti, splitMulti } from '../lib/schema'
 import { useBrands } from '../store/BrandsContext'
 import { useWrite } from '../store/useWrite'
 import type { BrandRow, FieldDef } from '../api/types'
@@ -121,11 +121,16 @@ export function BrandPage() {
       </footer>
 
       <div className="brand__back">
+        {/*
+          Возвращаемся в раздел бренда, а не на «Все»: после создания редактор
+          чаще всего заводит следующий бренд той же категории. Обычный возврат —
+          по истории: он сохраняет и страницу списка, и фильтры, и скролл.
+        */}
         <button
           className="btn btn--ghost"
-          onClick={() => (fromNew ? navigate('/') : navigate(-1))}
+          onClick={() => (fromNew ? navigate(`/c/${category}`) : navigate(-1))}
         >
-          ← {fromNew ? 'На главную' : 'Назад'}
+          ← {fromNew ? `В «${categoryLabel(category)}»` : 'Назад'}
         </button>
       </div>
     </article>
@@ -149,7 +154,7 @@ function Value({ field, value }: { field: FieldDef; value: string }) {
       </a>
     )
   }
-  if (field.type === 'multiselect') {
+  if (isMulti(field)) {
     return (
       <span className="chips">
         {splitMulti(value).map((v) => (

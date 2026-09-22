@@ -33,14 +33,15 @@ export function FilterChips({ fields, rows, filters, onChange }: Props) {
   const extraCount = countIn(extra)
   const activeCount = countIn(primary) + extraCount
 
-  // Раскладка групп живёт в lib/schema: галочки идут одной группой
-  // «Особенности», и стоит она там, где в порядке полей стоит первая из них.
+  // Раскладка групп живёт в lib/schema: галочка стоит отдельной строкой, если
+  // редакция не собрала её с другими через field_defs.filter_group.
   const groups = (list: FieldDef[]) =>
     filterGroups(list).map((group) => {
       if (group.kind === 'bools') {
         return (
-          <div key="bools" className="filters__group">
-            <span className="filters__label">Особенности</span>
+          <div key={`bools-${group.label || group.fields[0].column}`} className="filters__group">
+            {/* Без заголовка группа — это одна галочка, и подпись на ней самой. */}
+            {group.label && <span className="filters__label">{group.label}</span>}
             <div className="chips">
               {group.fields.map((field) => (
                 <button

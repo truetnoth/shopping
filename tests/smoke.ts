@@ -15,7 +15,7 @@ import { isClockSkew } from '../src/lib/clock'
 
 const f = (column: string, extra: Partial<FieldDef> = {}): FieldDef => ({
   column, label: column, type: 'text', options: [], required: false,
-  searchable: true, showInCard: true, order: 1, isName: false, ...extra,
+  searchable: true, showInCard: true, order: 1, isName: false, filterGroup: '', ...extra,
 })
 
 const fields: FieldDef[] = [
@@ -111,6 +111,35 @@ check(
   ['Москва', 'Нижний Новгород', 'Петербург'],
 )
 check('закрытый справочник данные не подхватывает', optionsWithOwn(fields[8], '', rows), [])
+
+// «Пометки» в красоте — тот же открытый справочник, но многозначный: у бренда
+// их бывает несколько сразу, и вписанное из формы становится кнопкой у всех.
+const marks = f('Пометки', { type: 'openmulti', options: ['не тестируется на животных'] })
+const marked: BrandRow[] = [
+  { id: 'm1', 'Пометки': 'веган, без отдушек' },
+  { id: 'm2', 'Пометки': 'не тестируется на животных' },
+  { id: 'm3', 'Пометки': '' },
+]
+check(
+  'открытый многозначный справочник растёт из данных',
+  optionsWithOwn(marks, '', marked),
+  ['не тестируется на животных', 'без отдушек', 'веган'],
+)
+check(
+  'выбранные пометки разбираются через запятую',
+  optionsWithOwn(marks, 'веган, своё', marked),
+  ['не тестируется на животных', 'без отдушек', 'веган', 'своё'],
+)
+check(
+  'фильтр по пометкам ловит одну из нескольких',
+  applyFilters(marked, { 'Пометки': ['веган'] }, [marks]).map((r) => r.id),
+  ['m1'],
+)
+check(
+  'несколько пометок в фильтре — это «или»',
+  applyFilters(marked, { 'Пометки': ['веган', 'не тестируется на животных'] }, [marks]).map((r) => r.id),
+  ['m1', 'm2'],
+)
 check('своё написание приводится к известному', normalizeOption(' казань ', ['Казань']), 'Казань')
 check('новое значение только обрезается', normalizeOption('  Казань', ['Москва']), 'Казань')
 check('пустой ввод ничего не задаёт', normalizeOption('   ', ['Москва']), '')
@@ -119,31 +148,31 @@ check('булево по умолчанию', boolPair(fields[1]), ['TRUE', 'FAL
 
 /* ------------------------------------------- главные и дополнительные фильтры */
 
-// Порядок повторяет field_defs: категория (3), «Для кого» (4) и цена (5) видны
-// сразу, всё, что дальше, уезжает под раскрывашку. Нефильтруемые поля
-// (название, ссылка, год) не попадают никуда.
+// Порядок повторяет field_defs: категория (3), «Для кого» (4), цена (5) и
+// мультибренд (6) видны сразу, всё, что дальше, уезжает под раскрывашку.
+// Нефильтруемые поля (название, ссылка, год) не попадают никуда.
 const ordered: FieldDef[] = [
   f('Бренд', { isName: true, order: 1 }),
   f('Ссылка', { type: 'url', order: 2 }),
   f('Категория', { type: 'multiselect', order: 3 }),
   f('Для кого', { type: 'multiselect', order: 4 }),
   f('Ценовой сегмент', { type: 'select', order: 5 }),
-  f('Теги', { type: 'multiselect', order: 6 }),
-  f('Город', { type: 'openselect', order: 8 }),
-  f('Ручная работа', { type: 'bool', order: 11 }),
-  f('Год основания', { type: 'number', order: 12 }),
+  f('Мультибренд', { type: 'bool', options: ['да'], order: 6 }),
+  f('Теги', { type: 'multiselect', order: 7 }),
+  f('Город', { type: 'openselect', order: 15 }),
+  f('Год основания', { type: 'number', order: 17 }),
 ]
 
 const columns = (list: FieldDef[]) => list.map((field) => field.column)
 
-check('главные фильтры — начало схемы', columns(splitFilters(ordered).primary), ['Категория', 'Для кого', 'Ценовой сегмент'])
-check('остальные фильтры — под раскрывашкой', columns(splitFilters(ordered).extra), ['Теги', 'Город', 'Ручная работа'])
+check('главные фильтры — начало схемы', columns(splitFilters(ordered).primary), ['Категория', 'Для кого', 'Ценовой сегмент', 'Мультибренд'])
+check('остальные фильтры — под раскрывашкой', columns(splitFilters(ordered).extra), ['Теги', 'Город'])
 
 /**
- * Галочки рисуются не по отдельности, а одной группой «Особенности», и она
- * встаёт туда, где стоит первая из них. Порядок как в лайфстайле после правки
- * критериев: «Маркетплейс» редакция просила первым среди дополнительных
- * фильтров, и с концевой группой он уезжал бы под «Зоны» и «Город».
+ * Галочка стоит отдельной строкой, если редакция не собрала её с другими через
+ * filter_group. Умолчание такое намеренно: «Мультибренд», «Продается на
+ * маркетплейсе» и «ЖП» редакция путала с остальными свойствами, пока они лежали
+ * в общей куче «Особенности». Порядок как в лайфстайле после правок 22.09.
  */
 const lifestyle: FieldDef[] = [
   f('Бренд', { isName: true, order: 1 }),
@@ -151,23 +180,58 @@ const lifestyle: FieldDef[] = [
   f('Категория', { type: 'multiselect', order: 3 }),
   f('Предназначение', { type: 'multiselect', order: 4 }),
   f('Ценовой сегмент', { type: 'select', order: 5 }),
-  f('Маркетплейс', { type: 'bool', options: ['да'], order: 6 }),
+  f('Мультибренд', { type: 'bool', options: ['да'], order: 6 }),
   f('Зоны', { type: 'multiselect', order: 7 }),
-  f('Город', { type: 'openselect', order: 10 }),
-  f('Ручная работа', { type: 'bool', options: ['да'], order: 13 }),
+  f('Характеристика', { type: 'select', order: 8 }),
+  f('Продается на маркетплейсе', { type: 'bool', options: ['да'], order: 9 }),
+  f('ЖП', { type: 'bool', options: ['да'], order: 10 }),
+  f('Есть своё производство', { type: 'bool', options: ['да'], order: 11, filterGroup: 'Особенности' }),
+  f('Ручная работа', { type: 'bool', options: ['да'], order: 12, filterGroup: 'Особенности' }),
+  f('Винтаж', { type: 'bool', options: ['да'], order: 13, filterGroup: 'Особенности' }),
+  f('СТМ', { type: 'bool', options: ['да'], order: 14, filterGroup: 'Особенности' }),
 ]
 
+// Группа без заголовка — это одна галочка, и подпись стоит на ней самой.
 const groupNames = (list: FieldDef[]) =>
-  filterGroups(list).map((group) => (group.kind === 'bools' ? 'Особенности' : group.field.column))
+  filterGroups(list).map((group) =>
+    group.kind === 'bools' ? group.label || columns(group.fields).join('+') : group.field.column,
+  )
 
-const boolsIn = (list: FieldDef[]) =>
-  filterGroups(list).flatMap((group) => (group.kind === 'bools' ? columns(group.fields) : []))
+const boolsIn = (list: FieldDef[], label: string) =>
+  filterGroups(list).flatMap((group) =>
+    group.kind === 'bools' && group.label === label ? columns(group.fields) : [],
+  )
 
-check('видимые фильтры лайфстайла', columns(splitFilters(lifestyle).primary), ['Категория', 'Предназначение', 'Ценовой сегмент'])
-check('«Особенности» встают по первой галочке', groupNames(splitFilters(lifestyle).extra), ['Особенности', 'Зоны', 'Город'])
-check('«Маркетплейс» — первый чип в «Особенностях»', boolsIn(splitFilters(lifestyle).extra), ['Маркетплейс', 'Ручная работа'])
-check('без галочек группы «Особенности» нет', groupNames([f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны'])
-check('группы идут по порядку полей, а не по списку', groupNames([f('Город', { type: 'openselect', order: 10 }), f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны', 'Город'])
+check('видимые фильтры лайфстайла', columns(splitFilters(lifestyle).primary), ['Категория', 'Предназначение', 'Ценовой сегмент', 'Мультибренд'])
+check(
+  'мультибренд — отдельной строкой среди главных',
+  groupNames(splitFilters(lifestyle).primary),
+  ['Категория', 'Предназначение', 'Ценовой сегмент', 'Мультибренд'],
+)
+check(
+  'маркетплейс и ЖП — тоже отдельно, «Особенности» под ними',
+  groupNames(splitFilters(lifestyle).extra),
+  ['Зоны', 'Характеристика', 'Продается на маркетплейсе', 'ЖП', 'Особенности'],
+)
+check(
+  'в общую группу попали только галочки с filter_group',
+  boolsIn(lifestyle, 'Особенности'),
+  ['Есть своё производство', 'Ручная работа', 'Винтаж', 'СТМ'],
+)
+check('без галочек общей группы нет', groupNames([f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны'])
+check('группы идут по порядку полей, а не по списку', groupNames([f('Город', { type: 'openselect', order: 15 }), f('Зоны', { type: 'multiselect', order: 7 })]), ['Зоны', 'Город'])
+
+// Общая группа встаёт по своей первой галочке, а не в конец списка — иначе
+// порядок полей для неё не решал бы ничего.
+check(
+  '«Особенности» встают по первой галочке',
+  groupNames([
+    f('Винтаж', { type: 'bool', options: ['да'], order: 13, filterGroup: 'Особенности' }),
+    f('Город', { type: 'openselect', order: 15 }),
+    f('Ручная работа', { type: 'bool', options: ['да'], order: 12, filterGroup: 'Особенности' }),
+  ]),
+  ['Особенности', 'Город'],
+)
 
 check('сайт бренда — первое поле типа url', urlField(fields)?.column, 'Ссылка')
 check('без url-поля ссылки нет', urlField([f('Бренд')]), undefined)

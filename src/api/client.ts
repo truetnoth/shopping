@@ -41,6 +41,7 @@ interface FieldRow {
   show_in_card: boolean
   sort_order: number
   is_name: boolean
+  filter_group: string | null
 }
 
 /**
@@ -240,6 +241,8 @@ function toFieldDef(f: FieldRow): FieldDef {
     showInCard: f.show_in_card,
     order: f.sort_order,
     isName: f.is_name,
+    // NULL значим: он и означает «галочка стоит в фильтрах отдельной строкой».
+    filterGroup: f.filter_group ?? '',
   }
 }
 
