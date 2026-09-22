@@ -54,15 +54,39 @@ export function isMulti(field: FieldDef): boolean {
  */
 export function optionsWithOwn(field: FieldDef, value: string, rows: BrandRow[] = []): string[] {
   const base = isOpen(field)
-    ? [...field.options, ...valuesInUse(field, rows).filter((v) => !field.options.includes(v))]
+    ? withoutKnown(field.options, valuesInUse(field, rows))
     : field.options
 
   const own = isMulti(field) ? splitMulti(value) : [String(value ?? '').trim()]
-  const extra = own.filter((v) => v && !base.includes(v))
-  return extra.length ? [...base, ...extra] : base
+  return withoutKnown(base, own)
 }
 
-/** Значения колонки, реально встречающиеся в базе, — по алфавиту и без дублей. */
+/**
+ * Дописывает к списку то, чего в нём ещё нет, — сравнивая без учёта регистра.
+ * Иначе «Не тестируется на животных» из старых данных встаёт отдельной кнопкой
+ * рядом с «не тестируется на животных» из справочника, и редакция видит два
+ * одинаковых варианта. Побеждает написание из левого списка: в field_defs оно
+ * канонично, данные лишь подсказывают недостающее.
+ */
+function withoutKnown(known: string[], extra: string[]): string[] {
+  const seen = new Set(known.map((v) => v.toLowerCase()))
+  const add: string[] = []
+
+  for (const value of extra) {
+    const key = value.toLowerCase()
+    if (!value || seen.has(key)) continue
+    seen.add(key)
+    add.push(value)
+  }
+
+  return add.length ? [...known, ...add] : known
+}
+
+/**
+ * Значения колонки, реально встречающиеся в базе, — по алфавиту и без дублей.
+ * Дубли считаем без учёта регистра: «Казань» и «казань» — одно значение, и
+ * остаётся то написание, которое встретилось первым по алфавиту.
+ */
 export function valuesInUse(field: FieldDef, rows: BrandRow[]): string[] {
   const seen = new Set<string>()
   for (const row of rows) {
@@ -70,7 +94,7 @@ export function valuesInUse(field: FieldDef, rows: BrandRow[]): string[] {
     const values = isMulti(field) ? splitMulti(cell) : [String(cell ?? '').trim()]
     for (const value of values) if (value) seen.add(value)
   }
-  return Array.from(seen).sort((a, b) => a.localeCompare(b, 'ru'))
+  return withoutKnown([], Array.from(seen).sort((a, b) => a.localeCompare(b, 'ru')))
 }
 
 /**

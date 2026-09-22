@@ -53,9 +53,49 @@ export function BrandForm({
     onSubmit(values)
   }
 
+  // Идущие подряд галочки рисуются одной строкой таблеток: у каждой был свой
+  // заголовок и своя строка с «Да» под ним — три строки экрана на свойство,
+  // которое умещается в одну кнопку.
+  const blocks: ({ kind: 'field'; field: FieldDef } | { kind: 'bools'; fields: FieldDef[] })[] = []
+  for (const field of fields) {
+    const last = blocks[blocks.length - 1]
+    if (field.type !== 'bool') {
+      blocks.push({ kind: 'field', field })
+    } else if (last?.kind === 'bools') {
+      last.fields.push(field)
+    } else {
+      blocks.push({ kind: 'bools', fields: [field] })
+    }
+  }
+
   return (
     <form className="form" onSubmit={handleSubmit}>
-      {fields.map((field) => {
+      {blocks.map((block) => {
+        if (block.kind === 'bools') {
+          const broken = block.fields.filter((f) => errors[f.column])
+          return (
+            <div
+              key={`bools-${block.fields[0].column}`}
+              className={`field field--bools${broken.length ? ' field--invalid' : ''}`}
+            >
+              <div className="chips">
+                {block.fields.map((field) => (
+                  <BoolChip
+                    key={field.column}
+                    field={field}
+                    value={values[field.column] ?? ''}
+                    onChange={(v) => set(field.column, v)}
+                  />
+                ))}
+              </div>
+              {broken.map((f) => (
+                <p key={f.column} className="field__error">{f.label}: {errors[f.column]}</p>
+              ))}
+            </div>
+          )
+        }
+
+        const { field } = block
         const id = `f-${field.column}`
         // У списка кнопок нет одного «того самого» поля ввода, на которое мог бы
         // указывать label, поэтому заголовок такого поля — обычный заголовок
@@ -103,6 +143,7 @@ export function BrandForm({
         )
       })}
 
+
       <div className="form__actions">
         <button type="button" className="btn btn--ghost" onClick={onCancel}>
           Отмена
@@ -132,21 +173,6 @@ function Control({
   switch (field.type) {
     case 'longtext':
       return <textarea id={id} rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
-
-    case 'bool': {
-      const [yes, no] = boolPair(field)
-      return (
-        <label className="checkbox">
-          <input
-            id={id}
-            type="checkbox"
-            checked={isTruthy(value)}
-            onChange={(e) => onChange(e.target.checked ? yes : no)}
-          />
-          <span>Да</span>
-        </label>
-      )
-    }
 
     case 'select':
       return <SingleSelect id={id} value={value} options={options} onChange={onChange} />
@@ -181,6 +207,36 @@ function Control({
     default:
       return <input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
   }
+}
+
+/**
+ * Галочка — такая же таблетка, как в фильтрах и справочниках: нажал, внутри
+ * появилась галочка. Подпись стоит на самой кнопке, отдельного заголовка у
+ * такого поля нет.
+ */
+function BoolChip({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDef
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [yes, no] = boolPair(field)
+  const on = isTruthy(value)
+
+  return (
+    <button
+      type="button"
+      className={`chip${on ? ' chip--on' : ''}`}
+      aria-pressed={on}
+      onClick={() => onChange(on ? no : yes)}
+    >
+      {on && <span className="chip__check" aria-hidden="true">✓ </span>}
+      {field.label}
+    </button>
+  )
 }
 
 /** Справочник с одним значением: ряд кнопок, выбрана максимум одна. */

@@ -63,7 +63,7 @@ create table if not exists public.brands_lifestyle (
   purpose         text not null default '',
   zones           text not null default '',
   -- Та же колонка, что «Характеристика» в моде, но справочник свой:
-  -- «попроще / дизайнерское» вместо «Базовое / Акцентное».
+  -- «попроще / дизайнерское» вместо «базовое / акцентное».
   style_role      text not null default '',
   vintage         text not null default '',
   private_label   text not null default '',
@@ -233,6 +233,11 @@ grant insert, update, delete on public.brands_fashion, public.brands_lifestyle, 
 -- Строки с table_name = '*' для city, country и founded_year намеренно общие,
 -- хотя колонки остались только в моде: brand_fields строится по
 -- information_schema, и правило без колонки просто не даёт строки.
+--
+-- Справочники пишутся строчными буквами — все, кроме города и страны: там это
+-- имена собственные, и «москва» читалась бы как опечатка. Регистр важен не
+-- только на вид: значения лежат в ячейках строками, и «Одежда» рядом с
+-- «одежда» дали бы две кнопки вместо одной.
 
 insert into public.field_defs
   (table_name, column_name, label, type, options, required, searchable, show_in_card, sort_order, filter_group)
@@ -240,7 +245,7 @@ values
   -- общее ядро
   ('*', 'name',           'Бренд',                     'text',        '{}',                                                      true,  true,  true,  1,  null),
   ('*', 'url',            'Сайт',                      'url',         '{}',                                                      true,  true,  true,  2,  null),
-  ('*', 'audience',       'Для кого',                  'multiselect', '{"Для женщин","Для мужчин"}',                             false, true,  true,  4,  null),
+  ('*', 'audience',       'Для кого',                  'multiselect', '{"для женщин","для мужчин"}',                             false, true,  true,  4,  null),
   ('*', 'price_tier',     'Ценовой сегмент',           'select',      '{"$","$$","$$$"}',                                        false, false, true,  5,  null),
   ('*', 'multibrand',     'Мультибренд',               'bool',        '{да}',                                                    false, false, true,  6,  null),
   -- Прежняя подпись «Маркетплейс» читалась как свойство самого бренда и
@@ -258,9 +263,9 @@ values
   ('*', 'notes',          'Примечания',                'longtext',    '{}',                                                      false, true,  true,  20, null),
 
   -- мода
-  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"Одежда","Верхняя одежда","Обувь","Сумки","Аксессуары","Нижнее белье","Украшения"}', true,  true, true, 3, null),
-  ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"Кэжуал","Деловой стиль","Ледилайк","Аутдор","Ворквир","Авангард"}',                 false, true, true, 7, null),
-  ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"Базовое","Акцентное"}',                                                             false, true, true, 8, null),
+  ('brands_fashion',   'fashion_kind',   'Категория',      'multiselect', '{"одежда","верхняя одежда","обувь","сумки","аксессуары","нижнее белье","украшения"}', true,  true, true, 3, null),
+  ('brands_fashion',   'tags',           'Теги',           'multiselect', '{"кэжуал","деловой стиль","ледилайк","аутдор","ворквир","авангард"}',                 false, true, true, 7, null),
+  ('brands_fashion',   'style_role',     'Характеристика', 'select',      '{"базовое","акцентное"}',                                                             false, true, true, 8, null),
 
   -- лайфстайл
   ('brands_lifestyle', 'lifestyle_kind', 'Категория',      'multiselect', '{"посуда","декор","мебель","хобби","уборка","текстиль","освещение","хранение","растения"}', true,  true, true, 3,  null),
@@ -271,7 +276,7 @@ values
   ('brands_lifestyle', 'private_label',  'СТМ',            'bool',        '{да}',                                                                                     false, false, true, 14, 'Особенности'),
 
   -- красота
-  ('brands_beauty',    'beauty_kind',    'Категория',      'multiselect', '{"Уход","Макияж","Для волос","Для лица","Для тела","Мужское","Парфюм","Бытовая химия","Для детей","Для подростков","Личная гигиена","Тревел"}', true, true, true, 3, null),
+  ('brands_beauty',    'beauty_kind',    'Категория',      'multiselect', '{"уход","макияж","для волос","для лица","для тела","мужское","парфюм","бытовая химия","для детей","для подростков","личная гигиена","тревел"}', true, true, true, 3, null),
   -- Заменили городу место: открытый многозначный справочник, куда редакция
   -- дописывает часто встречающиеся нюансы прямо из формы и потом ищет по ним.
   ('brands_beauty',    'marks',          'Пометки',        'openmulti',   '{"не тестируется на животных"}',                                                           false, true, true, 18, null)
